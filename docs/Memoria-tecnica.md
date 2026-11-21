@@ -59,3 +59,10 @@ El proyecto `mobile/` agrega una aplicación Android que carga el CRM desde el s
 | Demostración y dominio técnico | Guion reproducible en `README.md` y comprobación por HTTP en `scripts/verificar.mjs` |
 
 La recuperación por correo, la administración de cuentas y los módulos fuera del alcance de presentación siguen pendientes.
+
+## Verificación de la entrega
+
+- Se compiló Angular y se arrancó el CRM desde la terminal integrada de Antigravity. La prueba HTTP verificó la sesión, PostgreSQL, las rutas protegidas y los recursos de instalación web.
+- En el emulador Android se abrió el APK, se inició sesión y se cargó el tablero con datos de la API de Windows.
+- Docker Compose pasó la validación de configuración. La comprobación de los contenedores requiere que Docker Desktop tenga su motor Linux disponible.
+- Se creó la rama principal de Git y se incluyó la automatización de GitHub Actions. Falta asociar un repositorio remoto para ejecutarla.
