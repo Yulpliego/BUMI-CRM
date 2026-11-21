@@ -1,0 +1,41 @@
+name: Integración del CRM
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Compilar y arrancar Docker Compose
+        env:
+          POSTGRES_PASSWORD: postgres_test_only
+          DEMO_PASSWORD: VerificaSolo2026!
+        run: docker compose -f docker/compose.yaml up --build --detach
+      - name: Probar API, PostgreSQL y aplicación web
+        env:
+          DEMO_PASSWORD: VerificaSolo2026!
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health; then
+              node scripts/verificar.mjs http://127.0.0.1:8080
+              exit $?
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Mostrar registros si falla
+        if: failure()
+        env:
+          POSTGRES_PASSWORD: postgres_test_only
+          DEMO_PASSWORD: VerificaSolo2026!
+        run: docker compose -f docker/compose.yaml logs

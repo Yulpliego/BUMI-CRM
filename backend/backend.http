@@ -1,0 +1,16 @@
+@host = http://127.0.0.1:5088
+@correo = admin@nexo.test
+@claveDemo = NexoDemo-2026!
+
+### Estado de la API y PostgreSQL
+GET {{host}}/api/health
+
+### Autenticarse con la cuenta local de demostración
+POST {{host}}/api/auth/login
+Content-Type: application/json
+X-Nexo-Request: 1
+
+{"email":"{{correo}}","password":"{{claveDemo}}"}
+
+### Estadísticas del usuario autenticado
+GET {{host}}/api/estadisticas

@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+.env
+.env.*
+**/node_modules
+**/.angular
+**/dist
+**/bin
+**/obj
+**/wwwroot
+mobile
+docs
+scripts
+*.apk

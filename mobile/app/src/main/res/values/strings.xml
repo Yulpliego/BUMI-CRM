@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Nexo CRM</string>
+    <string name="server">Servidor</string>
+    <string name="server_title">Dirección del CRM</string>
+    <string name="server_hint">https://crm.tuempresa.mx</string>
+    <string name="connect">Conectar</string>
+    <string name="invalid_server">Escribe la dirección de un servidor HTTPS. La versión de prueba admite el emulador y localhost.</string>
+    <string name="server_unavailable">No se pudo abrir el CRM. Comprueba que el servidor está iniciado y revisa su dirección.</string>
+    <string name="retry">Reintentar</string>
+</resources>

@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Nexo CRM: iniciar local",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": ["/d", "/c", "Iniciar-CRM.cmd", "-NoBrowser"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated"}
+    },
+    {
+      "label": "Nexo CRM: iniciar con Docker",
+      "type": "process",
+      "command": "docker",
+      "args": ["compose", "--env-file", ".env", "-f", "docker/compose.yaml", "up", "--build"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated"}
+    }
+  ]
+}

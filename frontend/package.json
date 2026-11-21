@@ -1,0 +1,24 @@
+{
+    "name":  "nexo-crm",
+    "private":  true,
+    "scripts":  {
+                    "build":  "node ./node_modules/@angular/cli/bin/ng.js build",
+                    "start":  "node ./node_modules/@angular/cli/bin/ng.js serve --proxy-config proxy.json"
+                },
+    "dependencies":  {
+                         "@angular/common":  "~21.2.0",
+                         "@angular/compiler":  "~21.2.0",
+                         "@angular/core":  "~21.2.0",
+                         "@angular/forms":  "~21.2.0",
+                         "@angular/platform-browser":  "~21.2.0",
+                         "@angular/router":  "~21.2.0",
+                         "rxjs":  "~7.8.2",
+                         "zone.js":  "~0.15.1"
+                     },
+    "devDependencies":  {
+                            "@angular/build":  "~21.2.0",
+                            "@angular/cli":  "~21.2.0",
+                            "@angular/compiler-cli":  "~21.2.0",
+                            "typescript":  "~5.9.3"
+                        }
+}
