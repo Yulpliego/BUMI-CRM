@@ -20,6 +20,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+      target: api
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: ${CRM_ENVIRONMENT:-Development}

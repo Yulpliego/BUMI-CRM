@@ -78,6 +78,25 @@ Cada servicio tiene una comprobación de salud. Para ver registros, usa `docker 
 
 Para activar el correo en Docker, configura las variables opcionales `RECOVERY_MAIL_*` en tu `.env` local y vuelve a ejecutar `up --wait`. Los valores guardados por el lanzador de Windows se configuran por separado. Esta configuración sirve para desarrollo local. Mantén `.env`, las credenciales SMTP y los datos de PostgreSQL fuera de Git.
 
+## Publicar una demostración gratuita
+
+Render ejecuta Angular y ASP.NET Core en un solo servicio Docker con HTTPS. Neon conserva la base de datos PostgreSQL. Para esta demostración se crea una base independiente y se cargan los datos ficticios de Aurora. Usa los planes gratuitos en ambos servicios.
+
+1. En [Neon](https://console.neon.tech/), crea un proyecto gratuito. Copia la URL **directa** de PostgreSQL desde **Connect**, con el pool de conexiones desactivado.
+2. En [Render](https://dashboard.render.com/), crea un **Web Service** desde **Public Git Repository** y usa el repositorio `https://github.com/Yulpliego/BUMI-CRM` con la rama `main`. También puedes crear un **Blueprint** con el archivo `render.yaml` de este repositorio.
+3. Si configuras el servicio manualmente, selecciona **Docker**, el plan **Free**, el archivo `./backend/Dockerfile` y la ruta de salud `/api/health`. Usa el contexto raíz del repositorio. Configura estas variables en Render:
+
+   | Variable | Valor |
+   | --- | --- |
+   | `PORT` | `8080` |
+   | `BumiCloud__PostgresUrl` | URL directa de Neon. Contiene una contraseña y debe quedarse en el panel de Render. |
+   | `DemoPassword` | Contraseña de 12 a 128 caracteres que usarán las cuentas al crearse. Elige una exclusiva para esta demostración. |
+   | `BumiDemo__Enabled` | `true` para cargar el ejemplo de Aurora. |
+
+4. Cuando Render termine, abre la dirección HTTPS del servicio. Prueba `/api/health`, el inicio de sesión en dos pasos y una operación comercial de ejemplo.
+
+El contenedor conserva las claves de protección de sesión y del autenticador en PostgreSQL para que sigan disponibles tras un reinicio. Render Free puede tardar alrededor de un minuto en responder después de un periodo sin visitas. En este plan Render bloquea SMTP en los puertos habituales, por lo que la recuperación por correo requiere configurar un transporte compatible por separado. La recuperación con códigos de respaldo está disponible.
+
 ## Estructura y documentación
 
 ```text

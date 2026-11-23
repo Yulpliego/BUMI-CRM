@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace NexoCrm;
 
-public sealed class CrmDb(DbContextOptions<CrmDb> options) : DbContext(options)
+public sealed class CrmDb(DbContextOptions<CrmDb> options) : DbContext(options), IDataProtectionKeyContext
 {
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Party> Parties => Set<Party>();
     public DbSet<Contact> Contacts => Set<Contact>();

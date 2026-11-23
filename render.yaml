@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: bumi-crm
+    runtime: docker
+    plan: free
+    region: ohio
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: BumiCloud__PostgresUrl
+        sync: false
+      - key: DemoPassword
+        generateValue: true
+      - key: BumiDemo__Enabled
+        value: "true"
