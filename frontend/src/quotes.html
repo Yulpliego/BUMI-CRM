@@ -1,0 +1,138 @@
+<div class="quotes-page">
+  <header class="quotes-heading">
+    <div><p>Ventas <span aria-hidden="true">›</span> Cotizaciones</p><h1>{{detail ? 'Cotización ' + code('COT', detail.id) : 'Cotizaciones'}}</h1>
+      <small>Prepara propuestas y consulta su estado.</small></div>
+    <button class="primary" type="button" (click)="newQuote()">+ Nueva cotización</button>
+  </header>
+  @if (notice) { <p class="notice" role="status">{{notice}} @if (saleCreated && api.enabled('ventas')) { <a routerLink="/ventas">Ver ventas</a> }</p> }
+  @if (message) { <p class="error" role="alert">{{message}}</p> }
+  <div class="quotes-layout" [class.quotes-with-pdf]="detail && !edit && preview" [class.quotes-wide-pdf]="widePdf && preview && detail && !edit">
+    <aside class="panel quotes-list" aria-label="Registro de cotizaciones">
+      <header><h2>Cotizaciones</h2><span>{{quotes.length}}</span></header>
+      <div class="quotes-filters">
+        <label><span class="sr-only">Buscar cotizaciones</span><input type="search" [(ngModel)]="search" placeholder="Buscar folio o cliente"></label>
+        <label><span class="sr-only">Estado</span><select [(ngModel)]="filter"><option value="">Todos los estados</option>
+          @for (status of statuses; track status) {<option>{{status}}</option>}
+        </select></label>
+        <label class="check"><input type="checkbox" [(ngModel)]="dueSoon"> Por vencer</label>
+      </div>
+      <div class="quotes-items">
+        @for (q of filtered(); track q.id) {
+          <button type="button" [class.current]="(detail?.id ?? edit?.id) === q.id" [attr.aria-pressed]="(detail?.id ?? edit?.id) === q.id"
+            (click)="open(q)" [disabled]="busy">
+            <small>{{code('COT', q.id)}} <b>{{money.format(q.total)}}</b></small>
+            <strong>{{q.party}}</strong>
+            <span>{{date(q.validUntil)}} <span class="badge" [attr.data-status]="q.status">{{q.status}}</span></span>
+          </button>
+        } @empty {<p class="empty">{{loading ? 'Cargando cotizaciones…' : 'Sin cotizaciones para mostrar.'}}</p>}
+      </div>
+    </aside>
+
+    <div class="quote-workspace">
+      @if (edit; as q) {
+        <section class="panel padded quote-card">
+          <header class="section-head"><div><h2>{{q.id ? 'Editar ' + code('COT', q.id) : 'Nueva cotización'}}</h2><p>Datos generales y condiciones comerciales</p></div>
+            <button class="secondary" type="button" (click)="cancelEdit()">Cerrar</button></header>
+          @if (!parties.length) {
+            <p class="empty">Registra un cliente o prospecto activo para poder cotizar.</p>
+          } @else {
+            <form class="stack" (ngSubmit)="save()">
+              <div class="form-grid">
+                <label class="wide">Destinatario<select name="party" [(ngModel)]="q.partyId" required>
+                  <option [ngValue]="0" disabled>Selecciona un destinatario</option>
+                  @for (party of parties; track party.id) {<option [ngValue]="party.id">{{party.name}} · {{party.kind}}</option>}
+                </select></label>
+                <label>Vigencia<input type="date" name="valid" [(ngModel)]="q.validUntil" [min]="today" required></label>
+                <label>Impuesto (%)<input type="number" name="tax" [(ngModel)]="q.taxRate" min="0" max="100" step="0.01" required></label>
+                <fieldset class="wide quote-payment">
+                  <legend>Términos y condiciones</legend>
+                  <label>Condiciones de pago<select name="payment" [(ngModel)]="paymentChoice">
+                    <option value="">Sin especificar</option>
+                    @for (option of paymentOptions; track option) {<option [value]="option">{{option}}</option>}
+                    <option value="custom">Personalizada</option>
+                  </select></label>
+                  @if (paymentChoice === 'custom') {
+                    <label>Condición personalizada<input name="customPayment" [(ngModel)]="customPayment" maxlength="120" required></label>
+                  }
+                  <label>Términos<textarea name="terms" [(ngModel)]="q.terms" [attr.maxlength]="termsLimit" rows="3"></textarea></label>
+                </fieldset>
+                <label class="wide">Observaciones<textarea name="notes" [(ngModel)]="q.notes" maxlength="500" rows="2"></textarea></label>
+              </div>
+              <div class="actions quote-form-actions">
+                <button type="button" class="secondary" (click)="openProducts(productDialog)">{{q.lines.length ? 'Editar productos (' + q.lines.length + ')' : '+ Añadir productos'}}</button>
+                <button class="primary" [disabled]="busy || !q.partyId || !q.lines.length">Guardar borrador</button>
+              </div>
+            </form>
+          }
+          <dialog #productDialog class="quote-products" aria-labelledby="product-dialog-title">
+            <form class="stack" (ngSubmit)="applyProducts(productDialog)">
+              <header class="section-head"><h2 id="product-dialog-title">Productos y servicios</h2>
+                <button type="button" class="text-button" (click)="productDialog.close()">Cancelar</button></header>
+              @for (line of productLines; track line; let i = $index) {
+                <div class="quote-product-row">
+                  <bumi-product-choice [line]="line" [catalog]="catalog" />
+                  <label>Cantidad<input [name]="'quantity'+i" type="number" [(ngModel)]="line.quantity" min="1" max="10000" step="1" required></label>
+                  <label>Precio (MXN)<input [name]="'price'+i" type="number" [(ngModel)]="line.price" min="0.01" max="1000000" step="0.01" required></label>
+                  <label>Descuento (%)<input [name]="'discount'+i" type="number" [(ngModel)]="line.discount" min="0" max="100" step="0.01" required></label>
+                  @if (productLines.length > 1) {<button type="button" class="secondary" (click)="productLines.splice(i, 1)" [attr.aria-label]="'Quitar producto ' + (i+1)">Quitar</button>}
+                </div>
+              }
+              <div class="actions">
+                <button type="button" class="secondary" [disabled]="productLines.length >= 50" (click)="addProduct()">+ Agregar producto</button>
+                <button class="primary" [disabled]="!validProducts(productLines)">Aplicar productos</button>
+              </div>
+            </form>
+          </dialog>
+        </section>
+      } @else if (detail; as q) {
+        <section class="panel padded quote-card">
+          <header class="section-head"><div><h2>Datos generales</h2><p>{{code('COT', q.id)}}</p></div>
+            <span class="badge" [attr.data-status]="q.status">{{q.status}}</span></header>
+          <dl class="quote-fields">
+            <div><dt>Cliente</dt><dd>{{q.party}}</dd></div><div><dt>Responsable</dt><dd>{{q.owner}}</dd></div>
+            <div><dt>Fecha de emisión</dt><dd>{{date(q.date)}}</dd></div><div><dt>Válida hasta</dt><dd>{{date(q.validUntil)}}</dd></div>
+            <div><dt>Moneda</dt><dd>MXN · Peso mexicano</dd></div><div><dt>Impuesto</dt><dd>{{q.taxRate}} %</dd></div>
+          </dl>
+          <div class="actions">
+            <button class="secondary" type="button" (click)="preview = !preview">{{preview ? 'Ocultar PDF' : 'Vista previa PDF'}}</button>
+            @if (preview) {<button class="secondary quote-expand" type="button" (click)="widePdf = !widePdf">{{widePdf ? 'Vista lateral' : 'Ampliar PDF'}}</button>}
+            @switch (q.status) {
+              @case ('Borrador') {
+                <button class="secondary" type="button" (click)="editQuote(q)">Editar borrador</button>
+                <button class="primary" type="button" (click)="changeStatus(q.id, 'Enviada')" [disabled]="busy || q.validUntil < today">Marcar enviada</button>
+              }
+              @case ('Enviada') {
+                <button class="primary" type="button" (click)="changeStatus(q.id, 'Aceptada')" [disabled]="busy">Aceptar</button>
+                <button class="secondary" type="button" (click)="changeStatus(q.id, 'Rechazada')" [disabled]="busy">Rechazar</button>
+              }
+              @case ('Aceptada') {
+                @if (q.hasSale) {<span>Venta registrada</span>}
+                @else if (api.enabled('ventas')) {<button class="primary" type="button" (click)="createSale(q.id)" [disabled]="busy">Registrar venta</button>}
+              }
+            }
+          </div>
+        </section>
+        <section class="panel padded quote-card">
+          <h2>Totales</h2>
+          <dl class="quote-totals">
+            <div><dt>Subtotal neto</dt><dd>{{money.format(q.subtotal)}}</dd></div>
+            <div><dt>Impuesto</dt><dd>{{money.format(q.tax)}}</dd></div>
+            <div><dt>Total MXN</dt><dd>{{money.format(q.total)}}</dd></div>
+          </dl>
+        </section>
+        @if (q.terms || q.notes) {
+          <section class="panel padded quote-card">
+            <h2>Términos y observaciones</h2>
+            @if (q.terms) {<p>{{q.terms}}</p>}
+            @if (q.notes) {<p>{{q.notes}}</p>}
+          </section>
+        }
+        <section class="panel padded quote-card"><bumi-quote-versions [quote]="q" /></section>
+      } @else {
+        <section class="panel padded"><h2>Selecciona una cotización</h2><p class="muted">Consulta sus datos, revisa la propuesta en PDF o crea una nueva.</p></section>
+      }
+    </div>
+    @if (detail && !edit && preview) { <bumi-quote-preview [quote]="detail" /> }
+  </div>
+</div>
+

@@ -1,0 +1,25 @@
+:host{display:block;min-width:0}
+.chart-scroll{overflow-x:auto;padding:8px 5px}
+.chart-layout{display:grid;grid-template-columns:4rem minmax(0,1fr);gap:.6rem;--chart-height:240px}
+.chart-axis{height:var(--chart-height);display:flex;flex-direction:column;justify-content:space-between;text-align:right;color:var(--bumi-muted);font-size:.73rem;transform:translateY(-.45rem)}
+.chart-plot{position:relative;display:flex;min-width:0;align-items:start;isolation:isolate}
+.chart-plot::before{content:"";position:absolute;inset:0 0 auto;height:var(--chart-height);border-bottom:1px solid var(--bumi-line);background:repeating-linear-gradient(to bottom,var(--bumi-line) 0 1px,transparent 1px 25%);pointer-events:none;z-index:-1}
+.chart-plot svg{position:absolute;top:0;left:0;width:100%;height:var(--chart-height);pointer-events:none;overflow:visible}
+.forecast-band{fill:#0892a332}
+.actual-line,.projection-line{fill:none;stroke:var(--bumi-navy);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.projection-line{stroke:var(--bumi-teal);stroke-dasharray:6 5}
+.chart-lane{flex:1;min-width:0;display:grid;grid-template-rows:var(--chart-height) auto;position:relative;text-align:center}
+.chart-lane small{font-size:.7rem;padding:9px 1px 2px;color:var(--bumi-muted);white-space:nowrap}
+.chart-target{width:100%;min-height:0;border:0;background:transparent;border-radius:0;position:relative;display:flex;justify-content:center;align-items:end;gap:4px;padding:0 5%}
+.chart-lane.active .chart-target{background:#0754700f;outline:1px solid #a3c4d1;outline-offset:-1px}
+.chart-target:focus-visible{outline:2px solid var(--bumi-teal);outline-offset:-2px}
+.chart-bar{display:block;width:min(62%,55px);border-radius:5px 5px 0 0;background:var(--bumi-teal)}
+.chart-bar.comparison{background:#b8cbd7}
+.chart-lane.active .chart-bar:not(.comparison){background:var(--bumi-navy)}
+.chart-dot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--bumi-navy);border:1px solid white;transform:translateY(50%)}
+.chart-dot.projected{background:var(--bumi-teal)}
+.chart-lane.active .chart-dot{box-shadow:0 0 0 4px #00829642}
+.chart-tooltip{position:absolute;z-index:2;top:.45rem;transform:translateX(-50%);width:max-content;max-width:min(200px,58%);border-radius:8px;padding:.6rem .7rem;display:grid;gap:.25rem;background:#103554;color:#fff;box-shadow:0 6px 18px #12385245;pointer-events:none;font-size:.76rem;text-align:left}
+.chart-tooltip span{color:#e3f3f8}
+@media(max-width:650px){.chart-layout{--chart-height:185px;grid-template-columns:3rem minmax(0,1fr)}}
+

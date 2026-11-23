@@ -1,0 +1,67 @@
+<section class="operation-page">
+  <header class="page-head"><div><h1>Historial del cliente</h1><p>Consulta interacciones, cambios y seguimientos de cada ficha.</p></div>
+    @if (party && api.enabled('clientes')) {<a class="secondary button" routerLink="/clientes" [queryParams]="{ficha:party}">Abrir ficha</a>}
+  </header>
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+  <div class="operation-split history-top">
+    <section class="panel padded history-account">
+      <h2>Ficha comercial</h2>
+      <label>Cliente o prospecto<select [ngModel]="party" (ngModelChange)="selectParty($event)">
+        <option [ngValue]="0">Todas las fichas</option>
+        @for (person of parties; track person.id) {<option [ngValue]="person.id">{{person.name}}</option>}
+      </select></label>
+      @if (profile; as data) {
+        <dl class="operation-facts">
+          <div><dt>Estado</dt><dd><span class="badge" [attr.data-status]="data.party.active ? 'Activo' : 'Inactivo'">{{data.party.kind}} · {{data.party.active ? 'Activo' : 'Inactivo'}}</span></dd></div>
+          <div><dt>Responsable</dt><dd>{{data.owner}}</dd></div>
+          <div><dt>RFC</dt><dd>{{data.party.rfc || 'Sin registrar'}}</dd></div>
+          <div><dt>Último evento visible</dt><dd>{{rows[0] ? format(rows[0].at) : 'Sin eventos'}}</dd></div>
+        </dl>
+      }
+    </section>
+    <form class="panel padded form-grid" id="registrar-interaccion" (ngSubmit)="save()">
+      <h2 class="wide">Registrar interacción</h2>
+      <label>Ficha relacionada<select name="party" [(ngModel)]="newParty" required><option [ngValue]="0" disabled>Selecciona una ficha</option>
+        @for (person of parties; track person.id) {<option [ngValue]="person.id">{{person.name}}</option>}</select></label>
+      <label>Tipo<select name="type" [(ngModel)]="type"><option>Comentario</option><option>Llamada</option><option>Reunión</option></select></label>
+      <label class="wide">Descripción<textarea name="text" [(ngModel)]="text" maxlength="650" rows="3" required placeholder="Anota acuerdos y próximos pasos. Incluye el folio si está relacionado."></textarea></label>
+      <div class="section-head wide"><small class="muted">Autor · {{api.profile()?.name}} · Fecha y hora del registro</small>
+        <button class="primary" [disabled]="busy || !newParty || !text.trim()">Guardar interacción</button></div>
+    </form>
+  </div>
+  <section class="panel planning">
+    <header class="section-head operation-accent"><div><h2>Línea de tiempo</h2><p>Filtra los eventos para preparar tu próximo seguimiento.</p></div></header>
+    <div class="operation-split timeline-body">
+      <div>
+        <form class="history-filter" (ngSubmit)="load()">
+          <label>Tipo<select name="typeFilter" [(ngModel)]="filterType"><option value="">Todos</option>
+            @for (kind of eventTypes; track kind) {<option>{{kind}}</option>}</select></label>
+          <label>Autor<input name="author" [(ngModel)]="filterActor" maxlength="150" placeholder="Todos"></label>
+          <label>Desde<input name="from" type="date" [(ngModel)]="filterStart"></label>
+          <label>Hasta<input name="to" type="date" [(ngModel)]="filterEnd"></label>
+          <button class="secondary">Aplicar filtros</button>
+        </form>
+        <p class="muted">{{rows.length}} {{rows.length === 1 ? 'evento' : 'eventos'}}</p>
+        <div class="operation-timeline">
+          @for (item of rows; track item.key) {
+            <article class="operation-event" [id]="'evento-' + item.key" tabindex="-1">
+              <div class="actions"><small>{{format(item.at)}}</small><span class="badge">{{item.type}}</span><small>{{item.actor}}</small>
+                @if (!party) {<button type="button" class="text-button" (click)="selectParty(item.partyId)">{{item.party}}</button>}
+              </div>
+              <p>{{item.description}}</p>
+            </article>
+          } @empty {<p class="empty">Sin eventos con los filtros actuales.</p>}
+        </div>
+      </div>
+      <aside class="call-summary">
+        <h3>Resumen antes de la llamada</h3>
+        @if (summarySources(); as sources) {
+          @for (source of sources; track source.key) {
+            <div><p>{{source.description}}</p><a [href]="'#evento-' + source.key" (click)="showEvent($event,source.key)">Ver evento · {{source.type}} · {{format(source.at)}}</a></div>
+          } @empty {<p>{{party ? 'No hay eventos visibles para preparar el resumen.' : 'Elige una ficha para consultar sus últimos eventos.'}}</p>}
+          @if (sources.length) {<button type="button" class="secondary" (click)="reviewSummary()">Revisar borrador</button>}
+        }
+      </aside>
+    </div>
+  </section>
+</section>

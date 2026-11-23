@@ -1,0 +1,10 @@
+.quote-pdf { overflow: hidden; min-width: 0; }
+.quote-pdf header { padding: .9rem .95rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.65rem; border-bottom:1px solid var(--line); }
+.quote-pdf header small { display:block; color:var(--muted); margin-top:.3rem; }
+.quote-pdf header .actions { gap:.36rem; }
+.quote-pdf header :is(button,a) { padding:.38rem .53rem; min-height:34px; font-size:.73rem; }
+.quote-pdf iframe { display:block; border:0; width:100%; min-height:620px; height:75dvh; background:var(--bumi-surface); }
+.quote-pdf-status { margin:.62rem .9rem; color:var(--muted); font-size:.79rem; }
+.quote-pdf .error { margin:.65rem .9rem; }
+@media(max-width:600px) { .quote-pdf iframe { min-height:440px; } }
+

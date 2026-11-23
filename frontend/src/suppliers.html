@@ -1,0 +1,84 @@
+<section class="operation-page">
+  <header class="page-head">
+    <div><h1>Proveedores</h1><p>{{activeCount()}} activos · {{rows.length - activeCount()}} inactivos</p></div>
+    <div class="actions">
+      <input type="search" [(ngModel)]="search" aria-label="Buscar proveedores" placeholder="Buscar razón social, RFC o SKU">
+      @if (canEdit) {<button class="primary" (click)="create()">+ Nuevo proveedor</button>}
+    </div>
+  </header>
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+  @if (shortages(); as products) {
+    @if (products.length) {
+      <aside class="operation-alert">
+        <strong>{{products.length}} {{products.length === 1 ? 'producto con alerta de stock' : 'productos con alerta de stock'}}</strong>
+        <span>{{shortageText(products)}}</span>
+      </aside>
+    }
+  }
+    @if (draft; as item) {
+      <section class="panel padded editor">
+        <header class="section-head"><h2>{{item.id ? 'Editar proveedor' : 'Alta de proveedor'}}</h2><button class="secondary" (click)="draft = null">Cerrar</button></header>
+        <form class="form-grid" (ngSubmit)="save()">
+          <label>Nombre o razón social<input name="name" [(ngModel)]="item.name" required maxlength="140"></label>
+          <label>RFC<input name="rfc" [(ngModel)]="item.rfc" maxlength="13"></label>
+          <label>Contacto<input name="contact" [(ngModel)]="item.contact" maxlength="100"></label>
+          <label>Teléfono<input type="tel" name="phone" [(ngModel)]="item.phone" maxlength="40"></label>
+          <label>Correo<input type="email" name="email" [(ngModel)]="item.email" maxlength="160"></label>
+          <label>Dirección<input name="address" [(ngModel)]="item.address" maxlength="350"></label>
+          <fieldset class="audience wide"><legend>Productos que suministra</legend>
+            @for (product of catalog; track product.id) {
+              <label class="check"><input type="checkbox" [checked]="ids.includes(product.id)"
+                (change)="toggle(product.id,$event)">{{product.name}} <small>{{product.sku}}</small></label>
+            } @empty {<p class="empty">Agrega productos al catálogo de inventario.</p>}
+          </fieldset>
+          <label class="check"><input type="checkbox" name="active" [(ngModel)]="item.active"> Proveedor activo</label>
+          <div class="form-actions"><button class="primary" [disabled]="busy || !item.name.trim()">Guardar proveedor</button></div>
+        </form>
+      </section>
+    }
+  <div class="operation-split directory-split">
+    <section class="panel directory">
+      <header class="section-head"><h2>Lista de proveedores</h2></header>
+      <div class="operation-tabs" aria-label="Estado del proveedor">
+        @for (status of supplierFilters; track status.value) {
+          <button type="button" [attr.aria-pressed]="state === status.value" (click)="state = status.value">{{status.label}}</button>
+        }
+      </div>
+      @for (item of filtered(); track item.id) {
+        <button type="button" class="directory-entry" [attr.aria-pressed]="selected()?.id === item.id" (click)="selectedId = item.id">
+          <span><strong>{{item.name}}</strong><small>{{item.rfc || 'Sin RFC registrado'}}</small><small>{{item.products.length}} productos vinculados</small></span>
+          <span class="badge" [attr.data-status]="item.active ? 'Activo' : 'Inactivo'">{{item.active ? 'Activo' : 'Inactivo'}}</span>
+        </button>
+      } @empty {<p class="empty">Sin proveedores para esta búsqueda.</p>}
+    </section>
+    @if (selected(); as vendor) {
+      <section class="panel padded operation-detail">
+        <header class="section-head">
+          <div><h2>{{vendor.name}} <span class="badge" [attr.data-status]="vendor.active ? 'Activo' : 'Inactivo'">{{vendor.active ? 'Activo' : 'Inactivo'}}</span></h2><small>{{vendor.rfc}}</small></div>
+          <div class="actions">
+            @if (canEdit) {<button class="secondary" (click)="edit(vendor)">Editar</button>}
+            @if (vendor.email) {<a class="secondary button" [href]="'mailto:' + vendor.email">Contactar</a>}
+            @else if (vendor.phone) {<a class="secondary button" [href]="'tel:' + vendor.phone">Llamar</a>}
+          </div>
+        </header>
+        <dl class="operation-facts">
+          <div><dt>Contacto</dt><dd>{{vendor.contact || 'Sin registrar'}}</dd></div>
+          <div><dt>Teléfono</dt><dd>{{vendor.phone || 'Sin registrar'}}</dd></div>
+          <div><dt>Correo</dt><dd>{{vendor.email || 'Sin registrar'}}</dd></div>
+          <div><dt>Dirección</dt><dd>{{vendor.address || 'Sin registrar'}}</dd></div>
+        </dl>
+        <h3>Productos vinculados</h3>
+        <div class="table-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th>Stock</th><th>Estado</th></tr></thead><tbody>
+          @for (product of vendor.products; track product.id) {
+            @let current = productStock(product.id);
+            <tr><td>{{product.sku}}</td>
+              <td>@if (api.enabled('inventario')) {<a class="text-button" routerLink="/inventario" [queryParams]="{id: product.id}">{{product.name}}</a>} @else { {{product.name}} }</td>
+              <td>{{current?.stock ?? '—'}}</td><td><span class="badge" [attr.data-status]="product.active ? stockStatus(current) : 'Inactivo'">{{product.active ? stockStatus(current) : 'Inactivo'}}</span></td>
+            </tr>
+          } @empty {<tr><td colspan="4" class="empty">Aún sin productos vinculados.</td></tr>}
+        </tbody></table></div>
+      </section>
+    }
+  </div>
+  <bumi-purchasing [canEdit]="canEdit" [suppliers]="rows" [catalog]="catalog" />
+</section>

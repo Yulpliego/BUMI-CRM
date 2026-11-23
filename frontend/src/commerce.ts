@@ -1,129 +1,73 @@
 import { Component, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { FulfillmentMetrics, FulfillmentTools, QuoteVersions } from './commerce-tools';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import type { CatalogProduct } from './stock';
 import { Api, currency, dateInput, dateText, errorText, folio, PartyOption } from './api';
+import { QuotePreview } from './quote-preview';
+import { netLine, type QuoteLine as Line } from './commerce-values';
 
-interface Line { product: string; quantity: number; price: number; discount: number; }
+const paymentPrefix = 'Condiciones de pago: ';
+const saleTimestamp = new Intl.DateTimeFormat('es-MX', { dateStyle:'medium', timeStyle:'short', timeZone:'America/Mexico_City' });
 interface Amounts { subtotal: number; tax: number; total: number; lines: Line[]; }
 interface Quote extends Amounts {
   id: number; partyId: number; party: string; owner: string; date: string; validUntil: string;
   status: string; terms: string; notes: string; taxRate: number; hasSale: boolean;
 }
 interface Sale extends Amounts {
-  id: number; quoteId: number; party: string; owner: string; date: string; status: string;
+  id: number; quoteId: number | null; party: string; owner: string; date: string; status: string;
   cancelReason: string; cancelledBy: string; cancelledAt: string | null;
 }
+interface SaleHistory { id: number; actor: string; status: string; description: string; at: string; }
+interface DirectSale { partyId: number; reason: string; taxRate: number; lines: Line[]; }
 interface Draft { id: number; partyId: number; validUntil: string; terms: string; notes: string; taxRate: number; lines: Line[]; }
 
 @Component({
-  selector: 'crm-amounts',
+  selector: 'bumi-product-choice',
+  imports: [FormsModule],
   template: `
-    <div class="table-scroll line-list"><table>
-      <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Descuento</th></tr></thead>
-      <tbody>@for (line of details().lines; track $index) {
-        <tr><td>{{line.product}}</td><td>{{line.quantity}}</td><td>{{money.format(line.price)}}</td><td>{{line.discount}} %</td></tr>
-      }</tbody>
-    </table></div>
-    <dl class="totals">
-      <div><dt>Subtotal</dt><dd>{{money.format(details().subtotal)}}</dd></div>
-      <div><dt>Impuestos</dt><dd>{{money.format(details().tax)}}</dd></div>
-      <div><dt>Total MXN</dt><dd>{{money.format(details().total)}}</dd></div>
-    </dl>
+    @if (catalog().length) {
+      <label>Producto del catálogo<select [ngModel]="line().productId || null" [ngModelOptions]="{standalone:true}"
+        (ngModelChange)="select($event)">
+        <option [ngValue]="null">Capturar manualmente</option>
+        @for (item of catalog(); track item.id) {
+          <option [ngValue]="item.id">{{item.sku}} · {{item.name}} ({{item.stock}})</option>
+        }
+      </select></label>
+    }
+    <label>{{line().productId ? 'Producto seleccionado' : 'Descripción de la partida'}}
+      <input [ngModel]="line().product" (ngModelChange)="line().product = $event" [ngModelOptions]="{standalone:true}"
+        [readonly]="!!line().productId" maxlength="120" required>
+    </label>
   `
 })
-export class AmountsView {
-  details = input.required<Amounts>();
-  money = currency;
+export class ProductChoice {
+  line = input.required<Line>();
+  catalog = input.required<CatalogProduct[]>();
+  select(id: number | null) {
+    const item = this.catalog().find(value => value.id === id);
+    const line = this.line();
+    if (item) {
+      line.productId = item.id;
+      line.product = item.name;
+      line.price = item.price;
+    } else {
+      if (line.productId) line.product = '';
+      line.productId = null;
+    }
+  }
 }
 
 @Component({
-  imports: [FormsModule, RouterLink, AmountsView],
-  template: `
-    <header class="page-head"><div><p class="eyebrow">PROPUESTAS COMERCIALES</p><h1>Cotizaciones</h1><p>Prepara propuestas y da seguimiento a su aceptación.</p></div>
-      <button class="primary" (click)="newQuote()">+ Nueva cotización</button></header>
-    @if (notice) { <p class="notice" role="status">{{notice}} @if (saleCreated && api.enabled('ventas')) { <a routerLink="/ventas">Ver ventas</a> }</p> }
-    @if (message) { <p class="error" role="alert">{{message}}</p> }
-
-    @if (edit; as q) {
-      <section class="panel padded editor">
-        <header class="section-head"><h2>{{q.id ? 'Editar ' + code('COT', q.id) : 'Nueva cotización'}}</h2><button class="secondary" (click)="edit = null">Cerrar</button></header>
-        @if (!parties.length) {
-          <p class="empty">Registra un cliente o prospecto activo para poder cotizar.</p>
-        } @else {
-          <form class="stack" (ngSubmit)="save()">
-            <div class="form-grid">
-              <label>Destinatario<select name="party" [(ngModel)]="q.partyId" required>
-                <option [ngValue]="0" disabled>Selecciona un destinatario</option>
-                @for (party of parties; track party.id) {<option [ngValue]="party.id">{{party.name}} · {{party.kind}}</option>}
-              </select></label>
-              <label>Vigencia<input type="date" name="valid" [(ngModel)]="q.validUntil" [min]="today" required></label>
-              <label>Impuesto (%)<input type="number" name="tax" [(ngModel)]="q.taxRate" min="0" max="100" step="0.01" required></label>
-              <label>Condiciones<input name="terms" [(ngModel)]="q.terms" maxlength="500"></label>
-              <label class="wide">Observaciones<textarea name="notes" [(ngModel)]="q.notes" maxlength="500" rows="2"></textarea></label>
-            </div>
-            <div class="section-head"><h3>Productos</h3><button type="button" class="secondary" [disabled]="q.lines.length >= 50" (click)="addLine()">+ Agregar producto</button></div>
-            @for (line of q.lines; track line; let i = $index) {
-              <div class="line-editor">
-                <label>Producto<input [name]="'product'+i" [(ngModel)]="line.product" maxlength="120" required></label>
-                <label>Cantidad<input [name]="'quantity'+i" type="number" [(ngModel)]="line.quantity" min="1" max="10000" step="1" required></label>
-                <label>Precio en MXN<input [name]="'price'+i" type="number" [(ngModel)]="line.price" min="0.01" max="1000000" step="0.01" required></label>
-                @if (api.manager) {<label>Descuento (%)<input [name]="'discount'+i" type="number" [(ngModel)]="line.discount" min="0" max="100" step="0.01" required></label>}
-                @if (q.lines.length > 1) {<button type="button" class="secondary" (click)="q.lines.splice(i, 1)" [attr.aria-label]="'Quitar producto ' + (i+1)">Quitar</button>}
-              </div>
-            }
-            <div class="form-actions"><button class="primary" [disabled]="busy || !q.partyId">Guardar borrador</button></div>
-          </form>
-        }
-      </section>
-    }
-
-    @if (detail; as q) {
-      <section class="panel padded editor print-target">
-        <header class="section-head"><div><h2>{{code('COT', q.id)}} · {{q.party}}</h2><p>Emitida {{date(q.date)}} · Vigencia {{date(q.validUntil)}} · {{q.owner}}</p></div>
-          <div class="actions no-print"><button class="secondary" (click)="print()">Imprimir</button><button class="secondary" (click)="detail = null">Cerrar detalle</button></div>
-        </header>
-        <crm-amounts [details]="q" />
-        @if (q.terms) {<p><b>Condiciones</b> · {{q.terms}}</p>}
-        @if (q.notes) {<p><b>Observaciones</b> · {{q.notes}}</p>}
-        <div class="actions no-print">
-          <span class="badge" [attr.data-status]="q.status">{{q.status}}</span>
-          @switch (q.status) {
-            @case ('Borrador') {
-              <button class="secondary" (click)="editQuote(q)">Editar borrador</button>
-              <button class="primary" (click)="changeStatus(q.id, 'Enviada')" [disabled]="busy || q.validUntil < today">Marcar enviada</button>
-            }
-            @case ('Enviada') {
-              <button class="primary" (click)="changeStatus(q.id, 'Aceptada')" [disabled]="busy">Aceptar</button>
-              <button class="secondary" (click)="changeStatus(q.id, 'Rechazada')" [disabled]="busy">Rechazar</button>
-            }
-            @case ('Aceptada') {
-              @if (q.hasSale) {<span>Venta registrada</span>}
-              @else if (api.enabled('ventas')) {<button class="primary" (click)="createSale(q.id)" [disabled]="busy">Registrar venta</button>}
-            }
-          }
-        </div>
-      </section>
-    }
-
-    <section class="panel table-panel">
-      <div class="table-head"><h2>Registro de cotizaciones</h2><label class="inline-label">Estado<select [(ngModel)]="filter">
-        <option value="">Todos</option>@for (status of statuses; track status) {<option>{{status}}</option>}
-      </select></label></div>
-      <div class="table-scroll"><table>
-        <thead><tr><th>Folio</th><th>Destinatario</th><th>Vigencia</th><th>Total MXN</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
-        <tbody>
-          @for (q of filtered(); track q.id) {
-            <tr><td><strong>{{code('COT', q.id)}}</strong></td><td>{{q.party}}<small>{{q.owner}}</small></td><td>{{date(q.validUntil)}}</td>
-              <td><strong>{{money.format(q.total)}}</strong></td><td><span class="badge" [attr.data-status]="q.status">{{q.status}}</span></td>
-              <td><button class="text-button" (click)="open(q)">Ver detalle</button></td></tr>
-          } @empty {<tr><td colspan="6" class="empty">{{loading ? 'Cargando cotizaciones…' : 'No hay cotizaciones para mostrar.'}}</td></tr>}
-        </tbody>
-      </table></div>
-    </section>
-  `
+  imports: [FormsModule, RouterLink, ProductChoice, QuoteVersions, QuotePreview],
+  templateUrl: './quotes.html',
+  styleUrl: './quotes.css',
 })
 export class QuotesPage {
   api = inject(Api);
+  route = inject(ActivatedRoute);
+  catalog: CatalogProduct[] = [];
+  dueSoon = !!this.route.snapshot.queryParamMap.get('vence');
   money = currency;
   date = dateText;
   code = folio;
@@ -133,6 +77,18 @@ export class QuotesPage {
   quotes: Quote[] = [];
   edit: Draft | null = null;
   detail: Quote | null = null;
+  productLines: Line[] = [];
+  readonly paymentOptions = ['50% anticipo · 50% contra entrega', '100% por adelantado', '100% contra entrega',
+    'Crédito a 15 días', 'Crédito a 30 días'];
+  paymentChoice = '';
+  customPayment = '';
+  private get paymentHeader() {
+    const value = (this.paymentChoice === 'custom' ? this.customPayment : this.paymentChoice).trim();
+    return value ? paymentPrefix + value : '';
+  }
+  get termsLimit() { return 500 - (this.paymentHeader ? this.paymentHeader.length + 2 : 0); }
+  preview = true;
+  widePdf = false;
   filter = '';
   message = '';
   notice = '';
@@ -140,7 +96,17 @@ export class QuotesPage {
   loading = true;
   saleCreated = false;
 
-  ngOnInit() { void this.load(); }
+  async ngOnInit() {
+    await this.load();
+    const id = Number(this.route.snapshot.queryParamMap.get('id') || 0);
+    this.openRequested(id);
+    if (this.route.snapshot.queryParamMap.get('nueva') === '1') this.newQuote();
+    else if (!this.detail) this.detail = this.filtered()[0] ?? null;
+    if (this.api.enabled('inventario')) {
+      try { this.catalog = (await this.api.get<CatalogProduct[]>('inventario')).filter(x => x.active); }
+      catch (error) { this.message = errorText(error); }
+    }
+  }
   async load() {
     try {
       [this.quotes, this.parties] = await Promise.all([
@@ -151,36 +117,76 @@ export class QuotesPage {
     } catch (error) { this.message = errorText(error); }
     finally { this.loading = false; }
   }
-  filtered() { return this.quotes.filter(x => !this.filter || x.status === this.filter); }
+  search = '';
+  openRequested(id: number) {
+    const item = this.quotes.find(x => x.id === id);
+    if (item) this.open(item);
+  }
+  filtered() {
+    const query = this.search.trim().toLocaleLowerCase('es-MX');
+    return this.quotes.filter(x => (!this.filter || x.status === this.filter) &&
+      (!this.dueSoon || (x.status === 'Enviada' && x.validUntil >= this.today && x.validUntil <= dateInput(7))) &&
+      [x.party, folio('COT', x.id)].some(value => value.toLocaleLowerCase('es-MX').includes(query)));
+  }
   newQuote() {
     this.detail = null;
     this.resetFeedback();
+    this.paymentChoice = this.customPayment = '';
     this.edit = { id: 0, partyId: 0, validUntil: dateInput(14), taxRate: 16, terms: '', notes: '', lines: [] };
-    this.addLine();
   }
+  cancelEdit() { this.edit = null; }
   editQuote(q: Quote) {
     this.resetFeedback();
-    this.edit = {...q, lines: q.lines.map(line => ({...line}))};
+    this.paymentChoice = this.customPayment = '';
+    let terms = q.terms;
+    if (terms.startsWith(paymentPrefix)) {
+      const [header, ...remaining] = terms.split('\n');
+      const condition = header.slice(paymentPrefix.length).trim();
+      this.paymentChoice = this.paymentOptions.includes(condition) ? condition : 'custom';
+      if (this.paymentChoice === 'custom') this.customPayment = condition;
+      terms = remaining.join('\n').trimStart();
+    }
+    this.edit = {...q, terms, lines: q.lines.map(line => ({...line}))};
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
   open(q: Quote) {
     this.resetFeedback();
     this.edit = null;
     this.detail = q;
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    this.preview = true;
   }
-  addLine() { this.edit?.lines.push({product: '', quantity: 1, price: 0, discount: 0}); }
-  print() { window.print(); }
+  openProducts(dialog: HTMLDialogElement) {
+    if (!this.edit) return;
+    this.productLines = this.edit.lines.map(line => ({...line}));
+    if (!this.productLines.length) this.addProduct();
+    dialog.showModal();
+  }
+  addProduct() { this.productLines.push({product: '', quantity: 1, price: 0, discount: 0}); }
+  validProducts(lines: Line[]) {
+    return lines.length > 0 && lines.every(line => line.product.trim() && Number.isInteger(line.quantity) &&
+      line.quantity >= 1 && line.quantity <= 10000 && Number.isFinite(line.price) && line.price >= .01 &&
+      line.price <= 1_000_000 && Number.isFinite(line.discount) && line.discount >= 0 && line.discount <= 100);
+  }
+  applyProducts(dialog: HTMLDialogElement) {
+    if (!this.edit || !this.validProducts(this.productLines)) return;
+    this.edit.lines = this.productLines;
+    dialog.close();
+  }
   resetFeedback() { this.message = this.notice = ''; this.saleCreated = false; }
   async save() {
     if (!this.edit || this.busy) return;
-    const quote = this.edit;
+    if (!this.validProducts(this.edit.lines)) { this.message = 'Agrega al menos un producto con cantidad y precio válidos.'; return; }
+    if (this.paymentChoice === 'custom' && !this.customPayment.trim()) { this.message = 'Captura la condición de pago.'; return; }
+    const terms = [this.paymentHeader, this.edit.terms.trim()].filter(Boolean).join('\n\n');
+    if (terms.length > 500) { this.message = 'La condición de pago y los términos deben sumar hasta 500 caracteres.'; return; }
+    const quote = {...this.edit, terms};
     await this.mutate(async () => {
       const result = await this.api.send<{id: number}>(quote.id ? 'PUT' : 'POST',
         'cotizaciones' + (quote.id ? '/' + quote.id : ''), quote);
       this.edit = null;
       await this.load();
       this.detail = this.quotes.find(x => x.id === result.id) || null;
+      this.preview = true;
       this.notice = 'Borrador guardado.';
     });
   }
@@ -210,59 +216,24 @@ export class QuotesPage {
 }
 
 @Component({
-  imports: [FormsModule, RouterLink, AmountsView],
-  template: `
-    <header class="page-head"><div><p class="eyebrow">OPERACIÓN COMERCIAL</p><h1>Ventas</h1><p>Consulta tus operaciones y actualiza su seguimiento.</p></div>
-      @if (api.enabled('cotizaciones')) {<a class="secondary button" routerLink="/cotizaciones">Ver cotizaciones</a>}</header>
-    @if (notice) {<p class="notice" role="status">{{notice}}</p>}
-    @if (message) {<p class="error" role="alert">{{message}}</p>}
-
-    @if (detail; as s) {
-      <section class="panel padded editor">
-        <header class="section-head"><div><h2>{{code('VTA', s.id)}} · {{s.party}}</h2><p>{{code('COT', s.quoteId)}} · {{date(s.date)}} · {{s.owner}}</p></div>
-          <button class="secondary" (click)="detail = null; cancelling = false">Cerrar detalle</button></header>
-        <crm-amounts [details]="s" />
-        <div class="actions">
-          <span class="badge" [attr.data-status]="s.status">{{s.status}}</span>
-          @if (s.status === 'Registrada') {<button class="primary" [disabled]="busy" (click)="update(s.id, 'En proceso')">Poner en proceso</button>}
-          @if (s.status === 'En proceso') {<button class="primary" [disabled]="busy" (click)="update(s.id, 'Completada')">Marcar completada</button>}
-          @if (api.manager && s.status !== 'Cancelada') {<button class="secondary danger" [disabled]="busy" (click)="cancelling = !cancelling">Cancelar venta</button>}
-        </div>
-        @if (cancelling) {
-          <form class="stack subform" (ngSubmit)="update(s.id, 'Cancelada')">
-            <label>Motivo de cancelación<input name="reason" [(ngModel)]="reason" required maxlength="300"></label>
-            <div class="actions"><button class="danger secondary" [disabled]="busy">Confirmar cancelación</button>
-              <button type="button" class="secondary" (click)="cancelling = false">Volver</button></div>
-          </form>
-        }
-        @if (s.cancelReason) {<p class="notice">Cancelada por {{s.cancelledBy}} el {{date(s.cancelledAt || '')}}. Motivo registrado: {{s.cancelReason}}</p>}
-      </section>
-    }
-
-    <section class="panel table-panel">
-      <div class="table-head"><h2>Registro de ventas</h2><label class="inline-label">Estado<select [(ngModel)]="filter">
-        <option value="">Todos</option>@for (value of statuses; track value) {<option>{{value}}</option>}
-      </select></label></div>
-      <div class="table-scroll"><table>
-        <thead><tr><th>Folio</th><th>Cliente</th><th>Fecha</th><th>Total MXN</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
-        <tbody>
-          @for (s of filtered(); track s.id) {
-            <tr><td><strong>{{code('VTA', s.id)}}</strong><small>{{code('COT', s.quoteId)}}</small></td>
-              <td>{{s.party}}<small>{{s.owner}}</small></td><td>{{date(s.date)}}</td><td><strong>{{money.format(s.total)}}</strong></td>
-              <td><span class="badge" [attr.data-status]="s.status">{{s.status}}</span></td>
-              <td><button class="text-button" (click)="open(s)">Ver detalle</button></td></tr>
-          } @empty {<tr><td colspan="6" class="empty">{{loading ? 'Cargando ventas…' : 'No hay ventas para mostrar.'}}</td></tr>}
-        </tbody>
-      </table></div>
-    </section>
-  `
+  imports: [FormsModule, RouterLink, ProductChoice, FulfillmentTools, FulfillmentMetrics],
+  templateUrl: './sales.html',
+  styleUrl: './sales.css',
 })
 export class SalesPage {
   api = inject(Api);
+  route = inject(ActivatedRoute);
+  catalog: CatalogProduct[] = [];
   money = currency;
   date = dateText;
   code = folio;
   sales: Sale[] = [];
+  search = '';
+  historyDate = (value: string) => saleTimestamp.format(new Date(value));
+  netLine = netLine;
+  gross(sale: Sale) { return Math.round(sale.lines.reduce((total, line) => total + Math.round(line.price * 100) * line.quantity, 0)) / 100; }
+  statusCount(status: string) { return this.sales.filter(sale => sale.status === status).length; }
+  startCancellation() { this.reason = ''; this.cancelling = true; }
   detail: Sale | null = null;
   statuses = ['Registrada', 'En proceso', 'Completada', 'Cancelada'];
   filter = '';
@@ -272,8 +243,19 @@ export class SalesPage {
   loading = true;
   cancelling = false;
   reason = '';
+  direct: DirectSale | null = null;
+  clients: PartyOption[] = [];
+  history: SaleHistory[] = [];
 
-  ngOnInit() { void this.load(); }
+  async ngOnInit() {
+    await this.load();
+    const id = Number(this.route.snapshot.queryParamMap.get('id') || 0);
+    this.openRequested(id);
+    if (this.api.enabled('inventario')) {
+      try { this.catalog = (await this.api.get<CatalogProduct[]>('inventario')).filter(x => x.active); }
+      catch (error) { this.message = errorText(error); }
+    }
+  }
   async load() {
     try {
       this.sales = await this.api.get<Sale[]>('ventas');
@@ -281,12 +263,58 @@ export class SalesPage {
     } catch (error) { this.message = errorText(error); }
     finally { this.loading = false; }
   }
-  filtered() { return this.sales.filter(x => !this.filter || x.status === this.filter); }
-  open(sale: Sale) {
+  openRequested(id: number) {
+    const item = this.sales.find(x => x.id === id) ?? this.sales[0];
+    if (item) void this.open(item);
+  }
+  filtered() {
+    const query = this.search.trim().toLocaleLowerCase('es-MX');
+    return this.sales.filter(sale => (!this.filter || sale.status === this.filter) &&
+      [sale.party, sale.owner, this.code('VTA', sale.id), sale.quoteId ? this.code('COT', sale.quoteId) : '',
+        ...sale.lines.map(line => line.product)].some(value => value.toLocaleLowerCase('es-MX').includes(query)));
+  }
+  async open(sale: Sale) {
+    this.direct = null;
     this.detail = sale;
+    this.history = [];
     this.message = this.notice = this.reason = '';
     this.cancelling = false;
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    await this.loadHistory(sale.id);
+  }
+  async loadHistory(id: number) {
+    try {
+      const history = await this.api.get<SaleHistory[]>('ventas/' + id + '/historial');
+      if (this.detail?.id === id) this.history = history;
+    } catch (error) { if (this.detail?.id === id) this.message = errorText(error); }
+  }
+  async openDirectSale() {
+    if (this.busy) return;
+    this.busy = true;
+    this.message = this.notice = '';
+    try {
+      this.clients = await this.api.get<PartyOption[]>('ventas/clientes');
+      this.detail = null;
+      this.cancelling = false;
+      this.direct = {partyId: 0, taxRate: 16, reason: '', lines: []};
+      this.addDirectLine();
+    } catch (error) { this.message = errorText(error); }
+    finally { this.busy = false; }
+  }
+  addDirectLine() { this.direct?.lines.push({product: '', quantity: 1, price: 0, discount: 0}); }
+  async saveDirectSale() {
+    if (this.busy || !this.direct) return;
+    if (this.direct.lines.some(line => !line.product.trim())) { this.message = 'Captura el nombre de cada partida.'; return; }
+    this.busy = true;
+    this.message = this.notice = '';
+    try {
+      const result = await this.api.send<{id: number}>('POST', 'ventas/directa', this.direct);
+      this.direct = null;
+      await this.load();
+      const sale = this.sales.find(item => item.id === result.id);
+      if (sale) await this.open(sale);
+      this.notice = 'Venta directa registrada y autorizada.';
+    } catch (error) { this.message = errorText(error); }
+    finally { this.busy = false; }
   }
   async update(id: number, status: string) {
     if (this.busy) return;
@@ -297,6 +325,7 @@ export class SalesPage {
       this.cancelling = false;
       this.reason = '';
       await this.load();
+      await this.loadHistory(id);
       this.notice = 'Estado de la venta actualizado.';
     } catch (error) { this.message = errorText(error); }
     finally { this.busy = false; }

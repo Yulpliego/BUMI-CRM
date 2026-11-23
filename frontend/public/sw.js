@@ -1,4 +1,4 @@
-const offlineCache = 'nexo-offline-v1';
+const offlineCache = 'nexo-offline-v2';
 const offlinePage = '/sin-conexion.html';
 
 self.addEventListener('install', event => {

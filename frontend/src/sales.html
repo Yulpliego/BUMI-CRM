@@ -1,0 +1,145 @@
+<div class="sales-page">
+  <header class="sales-heading">
+    <div><p>Inicio <span aria-hidden="true">›</span> Ventas @if(detail; as s) { <span aria-hidden="true">›</span> {{code('VTA',s.id)}} }</p>
+      <div><h1>{{detail ? 'Venta ' + code('VTA', detail.id) : 'Ventas'}}</h1>
+        @if(detail; as s) {<span class="badge" [attr.data-status]="s.status">{{s.status}}</span>}
+      </div>
+    </div>
+    <div class="actions">
+      @if (detail; as s) {
+        @if (api.manager && s.status !== 'Cancelada' && !cancelling) {
+          <button class="secondary danger" type="button" [disabled]="busy" (click)="startCancellation()">Cancelar venta</button>
+        }
+      }
+      @if (api.enabled('cotizaciones')) {<a class="secondary button" routerLink="/cotizaciones">Cotizaciones</a>}
+      @if (api.manager) {<button class="primary" type="button" [disabled]="busy" (click)="openDirectSale()">+ Nueva venta</button>}
+    </div>
+  </header>
+  @if (notice) {<p class="notice" role="status">{{notice}}</p>}
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+    @if (direct; as draft) {
+      <section class="panel padded editor">
+        <header class="section-head"><div><h2>Registrar venta directa</h2><p>La autorización y el responsable se guardarán en el historial.</p></div>
+          <button class="secondary" (click)="direct = null">Cerrar</button></header>
+        <form class="stack" (ngSubmit)="saveDirectSale()">
+          <div class="form-grid">
+            <label>Cliente<select name="party" [(ngModel)]="draft.partyId" required>
+              <option [ngValue]="0" disabled>Selecciona un cliente activo</option>
+              @for (client of clients; track client.id) {<option [ngValue]="client.id">{{client.name}}</option>}
+            </select></label>
+            <label>Impuesto (%)<input type="number" name="tax" [(ngModel)]="draft.taxRate" min="0" max="100" step="0.01" required></label>
+            <label class="wide">Motivo de autorización<textarea name="reason" [(ngModel)]="draft.reason" maxlength="300" rows="2" required></textarea></label>
+          </div>
+          <div class="section-head"><h3>Productos</h3><button type="button" class="secondary" (click)="addDirectLine()" [disabled]="draft.lines.length >= 50">+ Agregar producto</button></div>
+          @for (line of draft.lines; track line; let i = $index) {
+            <div class="line-editor">
+              <bumi-product-choice [line]="line" [catalog]="catalog" />
+              <label>Cantidad<input [name]="'quantity'+i" type="number" [(ngModel)]="line.quantity" min="1" max="10000" step="1" required></label>
+              <label>Precio en MXN<input [name]="'price'+i" type="number" [(ngModel)]="line.price" min="0.01" max="1000000" step="0.01" required></label>
+              <label>Descuento (%)<input [name]="'discount'+i" type="number" [(ngModel)]="line.discount" min="0" max="100" step="0.01" required></label>
+              @if (draft.lines.length > 1) {<button type="button" class="secondary" (click)="draft.lines.splice(i, 1)">Quitar</button>}
+            </div>
+          }
+          <div class="form-actions"><button class="primary" [disabled]="busy || !draft.partyId || !draft.reason.trim()">Registrar venta</button></div>
+        </form>
+      </section>
+    }
+  <div class="sales-layout" [class.sales-layout-open]="detail && !direct">
+    <aside class="panel sales-directory" aria-label="Registro de ventas">
+      <header><h2>Ventas</h2><span>{{sales.length}}</span></header>
+      <div class="sales-directory-filters">
+        <label><span class="sr-only">Buscar ventas</span><input type="search" [(ngModel)]="search" placeholder="Buscar folio o cliente"></label>
+        <div class="sales-filter-chips" aria-label="Filtrar ventas por estado">
+          <button type="button" [attr.aria-pressed]="!filter" (click)="filter = ''">Todas <small>{{sales.length}}</small></button>
+          @for (status of statuses; track status) {
+            <button type="button" [attr.aria-pressed]="filter === status" (click)="filter = status">{{status}} <small>{{statusCount(status)}}</small></button>
+          }
+        </div>
+      </div>
+      <div class="sales-directory-items">
+        @for (s of filtered(); track s.id) {
+          <button type="button" [attr.aria-pressed]="detail?.id === s.id" (click)="open(s)" [disabled]="busy">
+            <small>{{code('VTA', s.id)}} <b>{{money.format(s.total)}}</b></small><strong>{{s.party}}</strong>
+            <span>{{date(s.date)}} <span class="badge" [attr.data-status]="s.status">{{s.status}}</span></span>
+          </button>
+        } @empty {<p class="empty">{{loading ? 'Cargando ventas…' : 'Sin ventas para mostrar.'}}</p>}
+      </div>
+    </aside>
+
+    <div class="sales-workspace">
+      @if (detail; as s) {
+        <section class="panel sales-card">
+          <header><h2>Estado de la venta</h2><span class="muted">Estado actual: {{s.status}}</span></header>
+          @if (s.status !== 'Cancelada') {
+            <ol class="sales-steps" aria-label="Avance de la venta">
+              @for (step of statuses.slice(0,3); track step; let i = $index) {
+                <li [class.reached]="i <= statuses.indexOf(s.status)" [attr.aria-current]="step === s.status ? 'step' : null">
+                  <span aria-hidden="true">{{i < statuses.indexOf(s.status) ? '✓' : i + 1}}</span><strong>{{step}}</strong>
+                </li>
+              }
+            </ol>
+          } @else {
+            <p class="sales-cancelled"><strong>Venta cancelada</strong>
+              @if (s.cancelReason) { <span>{{s.cancelReason}} · {{s.cancelledBy}} · {{date(s.cancelledAt ?? '')}}</span> }
+            </p>
+          }
+          @if (s.status === 'Registrada') {<button class="secondary" type="button" [disabled]="busy" (click)="update(s.id, 'En proceso')">Poner en proceso</button>}
+          @if (s.status === 'En proceso') {<button class="primary" type="button" [disabled]="busy" (click)="update(s.id, 'Completada')">Marcar completada</button>}
+          @if (cancelling) {
+            <form class="stack sales-cancel-form" (ngSubmit)="update(s.id, 'Cancelada')">
+              <label>Motivo de cancelación<input name="reason" [(ngModel)]="reason" required maxlength="300"></label>
+              <div class="actions"><button class="secondary danger" [disabled]="busy || !reason.trim()">Confirmar cancelación</button>
+                <button type="button" class="secondary" (click)="cancelling = false">Volver</button></div>
+            </form>
+          }
+        </section>
+        <section class="panel sales-card">
+          <header><h2>Datos de la venta</h2></header>
+          <dl class="sales-fields">
+            <div><dt>Folio</dt><dd>{{code('VTA',s.id)}}</dd></div><div><dt>Fecha de venta</dt><dd>{{date(s.date)}}</dd></div>
+            <div><dt>Cliente</dt><dd>{{s.party}}</dd></div><div><dt>Responsable</dt><dd>{{s.owner}}</dd></div>
+            <div><dt>Origen</dt><dd>
+              @if(s.quoteId && api.enabled('cotizaciones')) { <a routerLink="/cotizaciones" [queryParams]="{id:s.quoteId}">{{code('COT',s.quoteId)}}</a> }
+              @else { {{s.quoteId ? code('COT',s.quoteId) : 'Venta directa'}} }
+            </dd></div><div><dt>Moneda</dt><dd>MXN · Peso mexicano</dd></div>
+          </dl>
+        </section>
+        <section class="panel sales-card sales-products">
+          <header><h2>Partidas de la venta</h2><span class="muted">{{s.lines.length}} productos o servicios</span></header>
+          <div class="table-scroll" tabindex="0" aria-label="Partidas de la venta">
+            <table><thead><tr><th>Producto o servicio</th><th>Cant.</th><th>Precio unitario</th><th>Desc.</th><th>Importe</th></tr></thead>
+              <tbody>@for (line of s.lines; track $index) {
+                <tr><td>{{line.product}}</td><td>{{line.quantity}}</td><td>{{money.format(line.price)}}</td><td>{{line.discount}} %</td><td>{{money.format(netLine(line))}}</td></tr>
+              }</tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel sales-card">
+          <header><h2>Impuestos y total</h2></header>
+          <dl class="sales-totals">
+            <div><dt>Subtotal bruto</dt><dd>{{money.format(gross(s))}}</dd></div>
+            @if (gross(s) > s.subtotal) {<div><dt>Descuentos</dt><dd>{{money.format(s.subtotal - gross(s))}}</dd></div>}
+            <div><dt>Subtotal neto</dt><dd>{{money.format(s.subtotal)}}</dd></div>
+            <div><dt>Impuestos</dt><dd>{{money.format(s.tax)}}</dd></div>
+            <div><dt>Total MXN</dt><dd>{{money.format(s.total)}}</dd></div>
+          </dl>
+        </section>
+        <details class="panel sales-card sales-history">
+          <summary>Historial de la venta</summary>
+          @for (item of history; track item.id) {
+            <div class="report-row"><div><strong>{{item.status}}</strong><small>{{item.description}}</small></div>
+              <span>{{item.actor}} · {{historyDate(item.at)}}</span></div>
+          } @empty {<p class="muted">Aún no hay movimientos registrados en el historial.</p>}
+        </details>
+      } @else if (!direct) {
+        <section class="panel sales-card"><h2>Selecciona una venta</h2><p class="muted">Consulta sus datos, partidas y entregas en un mismo lugar.</p></section>
+      }
+    </div>
+    @if (detail; as s) {
+      <aside class="sales-fulfillment" aria-label="Entregas y devoluciones de esta venta">
+        <bumi-fulfillment [sale]="s.id" [lines]="s.lines" [status]="s.status" (changed)="loadHistory(s.id)" />
+      </aside>
+    }
+  </div>
+  <bumi-fulfillment-metrics />
+</div>

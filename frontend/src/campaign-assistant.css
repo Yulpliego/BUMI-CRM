@@ -1,0 +1,14 @@
+.campaign-assistant { padding: .9rem 1rem; background: linear-gradient(137deg,#fff 20%,var(--bumi-teal-soft) 100%); }
+.campaign-assistant header { display: flex; align-items: center; gap: .66rem; flex-wrap: wrap; }
+.campaign-assistant header > div:nth-child(2) { flex: 1 1 220px; }
+.campaign-assistant header p, .assistant-note { color: var(--muted); font-size: .78rem; margin: .2rem 0 0; }
+.assistant-symbol { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 12px; color: var(--bumi-navy); background: var(--bumi-teal-soft); flex: 0 0 37px; }
+.campaign-assistant form { margin: .8rem 0; }
+.assistant-results { margin: .55rem 0 .8rem; }
+.assistant-ideas { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 175px),1fr)); gap: .65rem; margin-top: .55rem; }
+.assistant-ideas article { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; padding: .65rem; background: #fff; border: 1px solid var(--line); border-radius: 11px; font-size: .78rem; }
+.assistant-ideas article span { display: inline-block; margin-left: .3rem; color: var(--bumi-gold); background: var(--bumi-gold-soft); padding: .15rem .28rem; border-radius: 5px; font-size: .67rem; }
+.assistant-ideas p { margin: 0; color: var(--muted); }
+.assistant-ideas small { margin-top: auto; font-size: .71rem; }
+.assistant-ideas button { min-height: 32px; padding: .3rem .55rem; font-size: .75rem; }
+

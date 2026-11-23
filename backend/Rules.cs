@@ -7,6 +7,11 @@ namespace NexoCrm;
 public static class CrmRules
 {
     public static readonly string[] Commercial = ["Administrador", "Gerente", "Vendedor"];
+    public static readonly string[] InventoryReaders = ["Administrador", "Gerente", "Vendedor", "Inventario"];
+    public static readonly string[] StockEditors = ["Administrador", "Inventario"];
+    public static readonly string[] SuppliersReaders = ["Administrador", "Gerente", "Compras"];
+    public static readonly string[] SuppliersEditors = ["Administrador", "Compras"];
+    public static readonly string[] Team = ["Administrador", "Gerente", "Vendedor", "Marketing", "Inventario", "Compras"];
     public static readonly string[] Managers = ["Administrador", "Gerente"];
     public static readonly string[] Marketing = ["Administrador", "Gerente", "Marketing"];
     public static readonly string[] OpportunityStages = ["Nueva", "En seguimiento", "Propuesta", "Negociación", "Ganada", "Perdida"];
@@ -16,7 +21,12 @@ public static class CrmRules
         ["clientes"] = Commercial,
         ["marketing"] = Marketing,
         ["cotizaciones"] = Commercial,
-        ["ventas"] = Commercial
+        ["ventas"] = Commercial,
+        ["agenda"] = Team,
+        ["historial"] = Commercial,
+        ["notificaciones"] = Team,
+        ["inventario"] = InventoryReaders,
+        ["proveedores"] = SuppliersReaders
     };
 
     private static readonly TimeZoneInfo Mexico = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");

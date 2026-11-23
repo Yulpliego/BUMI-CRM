@@ -1,125 +1,47 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Api, currency, dateText, errorText, PartyOption } from './api';
+import { DuplicateTools } from './growth-tools';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Api, currency, dateText, errorText, folio, PartyOption } from './api';
 
 interface Party extends PartyOption {
   personType: string; contact: string; email: string; phone: string; source: string;
-  rfc: string; industry: string; address: string; stage: string; active: boolean;
+  rfc: string; industry: string; address: string; stage: string; active: boolean; ownerId?: number;
 }
 interface Contact { id: number; name: string; position: string; email: string; phone: string; }
 interface Opportunity { id: number; description: string; interest: string; value: number; expectedClose: string | null; stage: string; }
-interface Details { party: Party; contacts: Contact[]; opportunities: Opportunity[]; }
+interface Details { party: Party; contacts: Contact[]; opportunities: Opportunity[]; owner: string; createdAt: string | null; notes: { id: number; description: string; actor: string; at: string }[]; }
+interface DirectoryRow { party: Party; owner: string; opportunityCount: number; opportunityValue: number; lastActivity: string | null; }
+type DirectoryParty = Party & Omit<DirectoryRow, 'party'>;
+type Category = '' | 'Cliente' | 'Prospecto' | 'inactive';
+type DetailSection = 'summary' | 'opportunities' | 'quotes' | 'activity';
+interface RelatedQuote { id: number; date: string; status: string; total: number; }
+interface Activity { key: string; type: string; description: string; actor: string; at: string; }
+const activityDate = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeZone: 'America/Mexico_City' });
 
 @Component({
-  imports: [FormsModule],
-  template: `
-    <header class="page-head"><div><p class="eyebrow">RELACIONES COMERCIALES</p><h1>Clientes y prospectos</h1><p>Consulta y administra tu cartera, contactos y oportunidades.</p></div>
-      <button class="primary" (click)="newParty()">+ Nuevo registro</button></header>
-    @if (notice) { <p class="notice" role="status">{{notice}}</p> }
-    @if (message) { <p class="error" role="alert">{{message}}</p> }
-
-    @if (edit; as p) {
-      <section class="panel padded editor">
-        <header class="section-head"><h2>{{p.id ? 'Editar ficha' : 'Nuevo registro'}}</h2><button type="button" class="secondary" (click)="edit = null">Cerrar</button></header>
-        <form class="form-grid" (ngSubmit)="saveParty()">
-          <label>Tipo de registro<select name="kind" [(ngModel)]="p.kind" [disabled]="!!p.id"><option>Prospecto</option><option>Cliente</option></select></label>
-          <label>Tipo de persona<select name="personType" [(ngModel)]="p.personType"><option>Empresa</option><option>Persona física</option></select></label>
-          <label>Nombre o razón social<input name="name" [(ngModel)]="p.name" required maxlength="150"></label>
-          <label>Persona de contacto<input name="contact" [(ngModel)]="p.contact" maxlength="120"></label>
-          <label>Correo<input type="email" name="email" [(ngModel)]="p.email" maxlength="160"></label>
-          <label>Teléfono<input type="tel" name="phone" [(ngModel)]="p.phone" maxlength="35"></label>
-          <label>RFC<input name="rfc" [(ngModel)]="p.rfc" maxlength="13"></label>
-          <label>Giro<input name="industry" [(ngModel)]="p.industry" maxlength="100"></label>
-          <label class="wide">Dirección<input name="address" [(ngModel)]="p.address" maxlength="250"></label>
-          @if (p.kind === 'Prospecto') {
-            <label>Origen<input name="source" [(ngModel)]="p.source" placeholder="Ej. Referido" maxlength="80"></label>
-            <label>Seguimiento<select name="stage" [(ngModel)]="p.stage">@for (stage of leadStages; track stage) {<option>{{stage}}</option>}</select></label>
-          }
-          <label class="check"><input type="checkbox" name="active" [(ngModel)]="p.active"> Registro activo</label>
-          <div class="form-actions wide"><button class="primary" [disabled]="busy">Guardar registro</button></div>
-        </form>
-      </section>
-    }
-
-    @if (details; as d) {
-      <section class="panel padded editor">
-        <header class="section-head"><div><h2>{{d.party.name}}</h2><p>{{d.party.kind}} · {{d.party.personType}} · {{d.party.active ? 'Activo' : 'Inactivo'}}</p></div>
-          <div class="actions">
-            <button class="secondary" (click)="beginEdit(d.party)">Editar</button>
-            @if (d.party.kind === 'Prospecto' && d.party.active) {
-              <button class="primary" (click)="convert(d.party.id)" [disabled]="busy">Convertir en cliente</button>
-            }
-            <button class="secondary" (click)="closeDetails()">Cerrar ficha</button>
-          </div>
-        </header>
-        <div class="detail-facts">
-          <div><small>Contacto principal</small><b>{{d.party.contact || '—'}}</b></div><div><small>Correo</small><b>{{d.party.email || '—'}}</b></div>
-          <div><small>Teléfono</small><b>{{d.party.phone || '—'}}</b></div><div><small>RFC</small><b>{{d.party.rfc || '—'}}</b></div>
-          <div><small>Giro</small><b>{{d.party.industry || '—'}}</b></div><div><small>Dirección</small><b>{{d.party.address || '—'}}</b></div>
-          @if (d.party.source) {<div><small>Origen</small><b>{{d.party.source}}</b></div>}
-        </div>
-        <div class="detail-columns">
-          <div>
-            <header class="section-head"><h3>Contactos</h3>@if (d.party.active) {<button class="text-button" (click)="newContact()">+ Agregar</button>}</header>
-            @for (contact of d.contacts; track contact.id) {
-              <div class="report-row"><div><b>{{contact.name}}</b><small>{{contact.position}} {{contact.email}} {{contact.phone}}</small></div></div>
-            } @empty {<p class="empty">Aún no hay contactos adicionales.</p>}
-            @if (contactEdit; as c) {
-              <form class="stack subform" (ngSubmit)="saveContact(d.party.id)">
-                <label>Nombre<input name="contactName" [(ngModel)]="c.name" maxlength="120" required></label>
-                <label>Cargo<input name="position" [(ngModel)]="c.position" maxlength="80"></label>
-                <label>Correo<input type="email" name="contactEmail" [(ngModel)]="c.email" maxlength="160"></label>
-                <label>Teléfono<input name="contactPhone" [(ngModel)]="c.phone" maxlength="35"></label>
-                <div class="actions"><button class="primary" [disabled]="busy">Guardar contacto</button><button type="button" class="secondary" (click)="contactEdit = null">Cancelar</button></div>
-              </form>
-            }
-          </div>
-          <div>
-            <header class="section-head"><h3>Oportunidades</h3>@if (d.party.active) {<button class="text-button" (click)="newOpportunity()">+ Agregar</button>}</header>
-            @for (o of d.opportunities; track o.id) {
-              <div class="report-row"><div><b>{{o.description}}</b><small>{{o.stage}} · {{money.format(o.value)}} · {{date(o.expectedClose || '')}}</small></div>
-                @if (d.party.active) {<button class="text-button" (click)="opportunityEdit = {...o}">Editar</button>}</div>
-            } @empty {<p class="empty">Aún no hay oportunidades registradas.</p>}
-            @if (opportunityEdit; as o) {
-              <form class="stack subform" (ngSubmit)="saveOpportunity(d.party.id)">
-                <label>Descripción<input name="description" [(ngModel)]="o.description" required maxlength="250"></label>
-                <label>Producto o servicio de interés<input name="interest" [(ngModel)]="o.interest" maxlength="150"></label>
-                <label>Valor estimado (MXN)<input type="number" name="value" [(ngModel)]="o.value" min="0" step="0.01" required></label>
-                <label>Cierre estimado<input type="date" name="close" [(ngModel)]="o.expectedClose"></label>
-                <label>Etapa<select name="opportunityStage" [(ngModel)]="o.stage">@for (stage of stages; track stage) {<option>{{stage}}</option>}</select></label>
-                <div class="actions"><button class="primary" [disabled]="busy">Guardar oportunidad</button><button type="button" class="secondary" (click)="opportunityEdit = null">Cancelar</button></div>
-              </form>
-            }
-          </div>
-        </div>
-      </section>
-    }
-
-    <section class="panel table-panel">
-      <div class="table-head"><div class="tabs" aria-label="Tipos de ficha">
-        @for (filter of types; track filter.value) {
-          <button [class.current]="type === filter.value" [attr.aria-pressed]="type === filter.value" (click)="type = filter.value">{{filter.text}}</button>
-        }
-      </div><label class="sr-only" for="party-search">Buscar registros</label><input class="search" id="party-search" type="search" [(ngModel)]="search" placeholder="Buscar por nombre o correo"></div>
-      <div class="table-scroll"><table>
-        <thead><tr><th>Nombre</th><th>Tipo</th><th>Contacto</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
-        <tbody>
-          @for (item of filtered(); track item.id) {
-            <tr><td><strong>{{item.name}}</strong><small>{{item.industry || item.source || item.personType}}</small></td>
-              <td>{{item.kind}}</td><td>{{item.contact || '—'}}<small>{{item.email}}</small></td>
-              <td><span class="badge" [attr.data-status]="item.active ? (item.kind === 'Cliente' ? 'Activo' : item.stage) : 'Inactivo'">{{item.active ? (item.kind === 'Cliente' ? 'Activo' : item.stage) : 'Inactivo'}}</span></td>
-              <td><button class="text-button" (click)="openDetails(item.id)">Ver ficha</button></td></tr>
-          } @empty {<tr><td colspan="5" class="empty">{{loading ? 'Cargando registros…' : 'No hay registros para mostrar.'}}</td></tr>}
-        </tbody>
-      </table></div>
-    </section>
-  `
+  imports: [FormsModule, RouterLink, DuplicateTools],
+  templateUrl: './parties.html',
+  styleUrl: './parties.css',
 })
 export class PartiesPage {
   api = inject(Api);
+  route = inject(ActivatedRoute);
+  private router = inject(Router);
   money = currency;
   date = dateText;
-  rows: Party[] = [];
+  rows: DirectoryParty[] = [];
+  code = folio;
+  localDate = (value: string) => activityDate.format(new Date(value));
+  section: DetailSection = 'summary';
+  sectionBusy = false;
+  sectionError = false;
+  confirmStatus = false;
+  quotes: RelatedQuote[] = [];
+  activity: Activity[] = [];
+  private detailRequest = 0;
+  private sectionRequest = 0;
+  owners: {id: number; name: string}[] = [];
   details: Details | null = null;
   edit: Party | null = null;
   contactEdit: Omit<Contact, 'id'> | null = null;
@@ -129,29 +51,165 @@ export class PartiesPage {
   busy = false;
   loading = true;
   search = '';
-  type = '';
-  types = [{ value: '', text: 'Todos' }, { value: 'Cliente', text: 'Clientes' }, { value: 'Prospecto', text: 'Prospectos' }];
+  type: Category = '';
+  status = '';
+  industry = '';
+  adviser = '';
+  page = 1;
+  perPage = 8;
+  industries: string[] = [];
+  advisers: string[] = [];
+  duplicates = new Set<number>();
+  duplicatesOnly = false;
+  totals: Record<Category, number> = { '': 0, Cliente: 0, Prospecto: 0, inactive: 0 };
+  readonly types: {value: Category; title: string; label: string; description: string; icon: string}[] = [
+    {value: '', title: 'Total de cartera', label: 'Todas', description: 'Fichas registradas', icon: '▤'},
+    {value: 'Cliente', title: 'Clientes activos', label: 'Clientes activos', description: 'Cuentas activas', icon: '✓'},
+    {value: 'Prospecto', title: 'Prospectos activos', label: 'Prospectos', description: 'Seguimiento comercial', icon: '◇'},
+    {value: 'inactive', title: 'Fichas inactivas', label: 'Inactivas', description: 'Cuentas o prospectos desactivados', icon: '◷'},
+  ];
   leadStages = ['Nuevo', 'En seguimiento', 'Calificado', 'No calificado'];
   stages = ['Nueva', 'En seguimiento', 'Propuesta', 'Negociación', 'Ganada', 'Perdida'];
 
-  ngOnInit() { void this.load(); }
+  ngOnInit() {
+    void this.load();
+    const ficha = Number(this.route.snapshot.queryParamMap.get('ficha') || 0);
+    if (ficha) void this.openDetails(ficha);
+    if (this.api.manager) {
+      void this.api.get<typeof this.owners>('clientes/responsables')
+        .then(result => this.owners = result).catch(error => this.message = errorText(error));
+    }
+  }
   async load() {
-    try { this.rows = await this.api.get<Party[]>('clientes'); }
+    try {
+      const records = await this.api.get<DirectoryRow[]>('clientes/directorio');
+      this.rows = records.map(({ party, ...summary }) => ({ ...party, ...summary }));
+      this.totals = {
+        '': this.rows.length,
+        Cliente: this.rows.filter(row => row.active && row.kind === 'Cliente').length,
+        Prospecto: this.rows.filter(row => row.active && row.kind === 'Prospecto').length,
+        inactive: this.rows.filter(row => !row.active).length,
+      };
+      this.industries = this.options(this.rows.map(row => row.industry));
+      this.advisers = this.options(this.rows.map(row => row.owner));
+      this.duplicates = this.findDuplicates();
+      this.page = Math.min(this.page, this.pageCount(this.filtered().length));
+    }
     catch (error) { this.message = errorText(error); }
     finally { this.loading = false; }
   }
   filtered() {
     const q = this.search.trim().toLocaleLowerCase('es-MX');
-    return this.rows.filter(x => (!this.type || x.kind === this.type) &&
-      [x.name, x.contact, x.email].some(value => value.toLocaleLowerCase('es-MX').includes(q)));
+    return this.rows.filter(x =>
+      (this.type === 'inactive' ? !x.active : !this.type || x.active && x.kind === this.type) &&
+      (!this.industry || x.industry === this.industry) &&
+      (!this.adviser || x.owner === this.adviser) &&
+      (!this.status || x.active === (this.status === 'active')) &&
+      (!this.duplicatesOnly || this.duplicates.has(x.id)) &&
+      [x.name, x.contact, x.email, x.rfc, x.phone].some(value => value.toLocaleLowerCase('es-MX').includes(q)));
+  }
+  setType(value: Category) { this.type = value; this.status = ''; this.page = 1; }
+  pageCount(length: number) { return Math.max(1, Math.ceil(length / this.perPage)); }
+  endOfPage(length: number) { return Math.min(length, this.page * this.perPage); }
+  initials(name: string) { return name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase(); }
+  partyStatus(party: Party) { return !party.active ? 'Inactivo' : party.kind === 'Cliente' ? 'Activo' : party.stage; }
+  openOpportunities(rows: Opportunity[]) { return rows.filter(op => op.stage !== 'Ganada' && op.stage !== 'Perdida'); }
+  private options(values: string[]) {
+    return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es-MX'));
+  }
+  private findDuplicates() {
+    const result = new Set<number>();
+    const fields = new Map<string, number>();
+    for (const row of this.rows.filter(item => item.active)) {
+      const phone = row.phone.replace(/\D/g, '');
+      const values = [
+        ['email', row.email.trim().toLowerCase()], ['phone', phone.length >= 7 ? phone : ''],
+        ['rfc', row.rfc.trim().toLowerCase()],
+      ];
+      for (const [field, value] of values) {
+        if (!value) continue;
+        const key = field + ':' + value;
+        const other = fields.get(key);
+        if (other !== undefined) { result.add(other); result.add(row.id); }
+        else fields.set(key, row.id);
+      }
+    }
+    return result;
+  }
+  toggleDuplicates() {
+    this.duplicatesOnly = !this.duplicatesOnly;
+    this.search = this.status = this.type = this.industry = this.adviser = '';
+    this.page = 1;
+  }
+  exportDirectory() {
+    const rows = [['Empresa', 'Tipo', 'RFC', 'Contacto', 'Correo', 'Teléfono', 'Industria', 'Origen', 'Asesor', 'Oportunidades abiertas', 'Valor MXN', 'Estado', 'Última actividad'],
+      ...this.filtered().map(row => [row.name, row.kind, row.rfc, row.contact, row.email, row.phone, row.industry,
+        row.source, row.owner, row.opportunityCount, row.opportunityValue, this.partyStatus(row), row.lastActivity || ''])];
+    const csv = rows.map(row => row.map(cell => {
+      const text = String(cell);
+      const value = typeof cell === 'string' && /^\s*[=+@-]/.test(text) ? "'" + text : text;
+      return '"' + value.replaceAll('"', '""') + '"';
+    }).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'BUMI-directorio-clientes.csv';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   newParty() {
     this.resetFeedback();
-    this.edit = {id: 0, name: '', kind: this.type || 'Prospecto', personType: 'Empresa', contact: '', email: '',
+    this.edit = {id: 0, name: '', kind: this.type === 'Cliente' ? 'Cliente' : 'Prospecto', personType: 'Empresa', contact: '', email: '',
       phone: '', source: '', rfc: '', industry: '', address: '', stage: 'Nuevo', active: true};
   }
-  beginEdit(p: Party) { this.resetFeedback(); this.edit = {...p}; }
-  closeDetails() { this.details = this.contactEdit = this.opportunityEdit = null; }
+  beginEdit(p: Party) {
+    this.resetFeedback();
+    this.edit = {...p};
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  closeDetails() {
+    this.detailRequest++;
+    this.sectionRequest++;
+    this.details = this.contactEdit = this.opportunityEdit = this.edit = null;
+    this.section = 'summary';
+    this.confirmStatus = false;
+  }
+  returnToDirectory() {
+    this.closeDetails();
+    this.resetFeedback();
+    if (this.route.snapshot.queryParamMap.has('ficha')) void this.router.navigateByUrl('/clientes', { replaceUrl: true });
+  }
+  detailSections() {
+    const sections: {key: DetailSection; label: string}[] = [
+      { key: 'summary', label: 'Resumen' }, { key: 'opportunities', label: 'Oportunidades' },
+    ];
+    if (this.api.enabled('cotizaciones')) sections.push({ key: 'quotes', label: 'Cotizaciones' });
+    if (this.api.enabled('historial')) sections.push({ key: 'activity', label: 'Actividad' });
+    return sections;
+  }
+  async selectSection(section: DetailSection) {
+    const id = this.details?.party.id;
+    if (!id || section === this.section) return;
+    this.section = section;
+    this.sectionBusy = section === 'quotes' || section === 'activity';
+    this.sectionError = false;
+    const request = ++this.sectionRequest;
+    try {
+      if (section === 'quotes') {
+        this.quotes = [];
+        const result = await this.api.get<RelatedQuote[]>('cotizaciones?ficha=' + id);
+        if (request === this.sectionRequest) this.quotes = result;
+      } else if (section === 'activity') {
+        this.activity = [];
+        const result = await this.api.get<Activity[]>('historial?ficha=' + id);
+        if (request === this.sectionRequest) this.activity = result;
+      }
+    } catch {
+      if (request === this.sectionRequest) this.sectionError = true;
+    } finally {
+      if (request === this.sectionRequest) this.sectionBusy = false;
+    }
+  }
   newContact() { this.contactEdit = {name: '', position: '', email: '', phone: ''}; }
   newOpportunity() { this.opportunityEdit = {id: 0, description: '', interest: '', value: 0, expectedClose: null, stage: 'Nueva'}; }
   resetFeedback() { this.message = this.notice = ''; }
@@ -159,18 +217,33 @@ export class PartiesPage {
   async openDetails(id: number) {
     this.resetFeedback();
     this.closeDetails();
+    const request = this.detailRequest;
     try {
-      this.details = await this.api.get<Details>('clientes/' + id + '/detalle');
+      const result = await this.api.get<Details>('clientes/' + id + '/detalle');
+      if (request !== this.detailRequest) return;
+      this.details = result;
       window.scrollTo({top: 0, behavior: 'smooth'});
-    } catch (error) { this.message = errorText(error); }
+    } catch (error) { if (request === this.detailRequest) this.message = errorText(error); }
   }
 
+  async reloadMerged(id:number) {
+    await this.load();
+    if (this.details?.party.id === id) {
+      try { this.details = await this.api.get<Details>('clientes/' + id + '/detalle'); }
+      catch (error) { this.message = errorText(error); }
+    }
+  }
   async saveParty() {
     if (!this.edit) return;
     const record = this.edit;
     await this.mutate(record.id ? 'PUT' : 'POST', 'clientes' + (record.id ? '/' + record.id : ''), record,
       'Registro guardado.', this.details?.party.id === record.id ? record.id : undefined);
     if (!this.message) this.edit = null;
+  }
+  async toggleParty(party: Party) {
+    await this.mutate('PUT', 'clientes/' + party.id, {...party, active: !party.active},
+      party.active ? 'Ficha desactivada.' : 'Ficha reactivada.', party.id);
+    if (!this.message) this.confirmStatus = false;
   }
   async convert(id: number) {
     await this.mutate('POST', 'clientes/' + id + '/convertir', {}, 'Prospecto convertido en cliente.', id);
@@ -192,7 +265,10 @@ export class PartiesPage {
     this.resetFeedback();
     try {
       await this.api.send(method, path, input);
-      if (detailId) this.details = await this.api.get<Details>('clientes/' + detailId + '/detalle');
+      if (detailId && this.details?.party.id === detailId) {
+        const result = await this.api.get<Details>('clientes/' + detailId + '/detalle');
+        if (this.details?.party.id === detailId) this.details = result;
+      }
       await this.load();
       this.notice = success;
     } catch (error) { this.message = errorText(error); }

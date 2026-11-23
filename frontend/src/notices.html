@@ -1,0 +1,50 @@
+<section class="operation-page">
+  <header class="page-head"><div><h1>Notificaciones</h1><p>{{unread()}} sin leer · {{critical().length}} críticas sin leer</p></div>
+    <div class="actions"><button class="secondary" [disabled]="busy" (click)="load()">Actualizar</button>
+      <button class="secondary" [disabled]="busy || !unread()" (click)="markAll()">Marcar todas como leídas</button></div>
+  </header>
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+  <div class="operation-split notices-split">
+    <section class="panel notice-inbox">
+      <div class="operation-tabs" aria-label="Filtrar avisos">
+        @for (tab of filters; track tab) {<button type="button" [attr.aria-pressed]="filter === tab" (click)="filter = tab">{{tab}}</button>}
+      </div>
+      @for (item of filtered(); track item.key) {
+        <article class="inbox-entry" [attr.data-priority]="priority(item)" [class.notice-read]="item.read">
+          <span class="notice-icon" aria-hidden="true">{{noticeIcon(item)}}</span>
+          <div>
+            <div class="actions"><strong>{{item.title}}</strong><span class="badge priority">{{priority(item)}}</span>
+              @if (!item.read) {<span class="badge unread-label">Sin leer</span>}</div>
+            <p>{{item.detail}}</p>
+            <div class="actions notice-actions">
+              @if (item.at) {<small>{{format(item.at)}}</small>}
+              <button type="button" class="text-button" [disabled]="busy" (click)="open(item)">Abrir registro ↗</button>
+              @if (!item.read) {<button type="button" class="text-button" [disabled]="busy" (click)="mark(item)">Marcar como leída</button>}
+            </div>
+          </div>
+        </article>
+      } @empty {<p class="empty">Sin notificaciones para este filtro.</p>}
+    </section>
+    <aside class="panel padded critical-list">
+      <h2>Pendientes críticos</h2>
+      <p class="muted">Avisos sin leer que requieren atención.</p>
+      @for (item of critical(); track item.key) {
+        <div><strong>{{item.title}}</strong><p>{{item.detail}}</p><button class="secondary" [disabled]="busy" (click)="open(item)">Revisar registro</button></div>
+      } @empty {<p class="muted">Estás al día con los avisos críticos.</p>}
+    </aside>
+  </div>
+  <section class="panel planning">
+    <header class="section-head operation-accent"><div><h2>Preferencias y resumen de alertas</h2><p>Agrupa tus avisos y configura qué notificaciones priorizar.</p></div></header>
+    <div class="padded">
+      <div class="notice-totals">
+        @for (group of counts(); track group.name) {
+          <button type="button" (click)="filter = group.name"><small>{{group.name}}</small><strong>{{group.total}}</strong><small>{{group.unread}} sin leer</small></button>
+        }
+      </div>
+      <div class="operation-split notice-config">
+        <bumi-notice-preferences (changed)="load()" />
+        <aside class="notice-rule"><h3>Escalamiento a gerencia</h3><p>Las reuniones y los seguimientos vencidos aparecen en la bandeja de gerencia después del plazo configurado por el responsable.</p></aside>
+      </div>
+    </div>
+  </section>
+</section>

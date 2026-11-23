@@ -1,0 +1,55 @@
+:host { display:block; container-type:inline-size; }
+.quotes-page { display:grid; gap:1rem; min-width:0; }
+.quotes-heading { display:flex; align-items:end; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
+.quotes-heading h1 { font-size:clamp(1.5rem, 3vw, 2.1rem); }
+.quotes-heading p { color:var(--muted); margin:0 0 .25rem; font-size:.78rem; }
+.quotes-heading small { color:var(--muted); display:block; margin-top:.32rem; }
+.quotes-page > :is(.notice,.error) { margin:0; }
+.quotes-layout { display:grid; grid-template-columns:minmax(182px, .76fr) minmax(0, 2fr); align-items:start; gap:.8rem; }
+.quotes-layout.quotes-with-pdf { grid-template-columns:minmax(174px,.8fr) minmax(0,1.25fr) minmax(0,1.55fr); }
+.quotes-layout.quotes-wide-pdf { grid-template-columns:minmax(182px, .76fr) minmax(0, 2fr); }
+.quotes-wide-pdf > bumi-quote-preview { grid-column:1 / -1; }
+.quote-workspace { min-width:0; display:grid; gap:.75rem; }
+.quotes-list { overflow:hidden; }
+.quotes-list > header { display:flex; align-items:center; gap:.5rem; padding:.85rem .8rem .5rem; }
+.quotes-list > header span { background:var(--bumi-hover); color:var(--bumi-navy); border-radius:6px; padding:.14rem .35rem; font-size:.72rem; }
+.quotes-list > header h2 { font-size:1rem; }
+.quotes-filters { display:grid; gap:.35rem; padding:.4rem .75rem .55rem; }
+.quotes-filters :is(input[type=search],select) { min-height:36px; font-size:.76rem; }
+.quotes-filters .check { min-height:30px; font-size:.76rem; }
+.quotes-items { max-height:620px; overflow:auto; border-top:1px solid var(--line); }
+.quotes-items button { color:var(--bumi-ink); display:grid; gap:.35rem; background:#fff; border:0; border-bottom:1px solid var(--line); border-left:3px solid transparent; width:100%; text-align:left; padding:.66rem .68rem; }
+.quotes-items button:last-child { border-bottom:0; }
+.quotes-items button:hover,.quotes-items button.current { background:var(--bumi-hover); }
+.quotes-items button.current { border-left-color:var(--bumi-teal); }
+.quotes-items button > :is(span,small) { display:flex; align-items:center; justify-content:space-between; gap:.3rem; flex-wrap:wrap; color:var(--muted); font-size:.72rem; }
+.quotes-items button strong { font-size:.8rem; overflow-wrap:anywhere; }
+.quotes-items button .badge { font-size:.66rem; }
+.quote-card .section-head { flex-wrap:wrap; }
+.quote-card > h2 { margin-bottom:.62rem; }
+.quote-card p { font-size:.83rem; color:var(--muted); white-space:pre-wrap; }
+.quote-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; margin:0 0 .9rem; }
+.quote-fields div { background:var(--bumi-surface); padding:.55rem; border-radius:7px; overflow-wrap:anywhere; }
+.quote-fields dt,.quote-totals dt { color:var(--muted); font-size:.77rem; }
+.quote-fields dd { margin:.25rem 0 0; font-size:.87rem; font-weight:650; }
+.quote-totals { display:grid; gap:.42rem; margin:0; font-variant-numeric:tabular-nums; }
+.quote-totals div { display:flex; justify-content:space-between; gap:.5rem; padding:.34rem .48rem; }
+.quote-totals dd { margin:0; font-weight:650; }
+.quote-totals div:last-child { border-radius:6px; background:var(--bumi-teal-soft); color:var(--bumi-navy); font-size:1.12rem; }
+.quote-payment { margin:0; padding:.65rem .72rem .78rem; min-inline-size:0; display:grid; gap:.62rem; border:1px solid var(--line); border-radius:9px; }
+.quote-payment legend { padding:0 .32rem; color:var(--bumi-navy); font-size:.88rem; font-weight:680; }
+.quote-form-actions { justify-content:space-between; }
+.quote-products { width:min(92vw, 850px); border:1px solid var(--line); border-radius:13px; padding:1rem; color:var(--ink); box-shadow:0 18px 40px #12365230; }
+.quote-products::backdrop { background:#102b4066; }
+.quote-product-row { display:grid; grid-template-columns:minmax(0, 1.35fr) repeat(3,minmax(78px,.65fr)) auto; align-items:end; gap:.5rem; border-bottom:1px solid var(--line); padding-bottom:.65rem; }
+@container (max-width:960px) {
+  .quotes-layout.quotes-with-pdf { grid-template-columns:minmax(182px,.76fr) minmax(0,2fr); }
+  .quotes-with-pdf > bumi-quote-preview { grid-column:1 / -1; }
+  .quote-expand { display:none; }
+}
+@container (max-width:625px) {
+  .quotes-layout,.quotes-layout.quotes-with-pdf { grid-template-columns:minmax(0,1fr); }
+  .quotes-items { max-height:270px; }
+  .quote-product-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+

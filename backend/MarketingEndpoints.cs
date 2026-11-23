@@ -12,28 +12,29 @@ public static class MarketingEndpoints
         routes.MapGet("", List);
         routes.MapGet("/publico", async (CrmDb db) => Results.Ok(await db.Parties.AsNoTracking()
             .Where(x => x.Active).OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Kind }).ToListAsync()));
+        routes.MapPost("/asistente", CampaignAssistant.Suggest);
         var writers = new[] { "Administrador", "Marketing" };
-        routes.MapPost("", (CampaignInput input, ClaimsPrincipal user, CrmDb db) => Save(null, input, user, db))
-            .RequireAuthorization(policy => policy.RequireRole(writers));
+        routes.MapPost("", (CampaignInput input, ClaimsPrincipal user, CrmDb db) => Save(null, input, user, db));
         routes.MapPut("/{id:int}", (int id, CampaignInput input, ClaimsPrincipal user, CrmDb db) => Save(id, input, user, db))
             .RequireAuthorization(policy => policy.RequireRole(writers));
     }
 
     private static async Task<IResult> List(CrmDb db) => Results.Ok(await (
-        from campaign in db.Campaigns.AsNoTracking()
+        from campaign in db.Campaigns.AsNoTracking().AsSplitQuery()
         join owner in db.Accounts on campaign.OwnerId equals owner.Id
         orderby campaign.Start descending
         select new
         {
             campaign.Id, campaign.Name, campaign.Goal, campaign.Description, campaign.Channel, campaign.Segment,
             campaign.Status, campaign.Start, campaign.End, campaign.Reached, campaign.Leads, owner = owner.Name,
-            audienceIds = campaign.Audience.Select(x => x.Id).ToList()
+            audienceIds = campaign.Audience.Select(x => x.Id).ToList(),
+            audience = campaign.Audience.OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Kind }).ToList()
         }).ToListAsync());
 
     private static async Task<IResult> Save(int? id, CampaignInput input, ClaimsPrincipal user, CrmDb db)
     {
         if (!Text(input.Name, 150, true) || !Text(input.Goal, 200, true) || !Text(input.Description, 500) ||
-            !Text(input.Segment, 150) || input.Channel is not ("Email" or "Eventos" or "Redes sociales" or "Teléfono" or "Otro") ||
+            !Text(input.Segment, 150) || !CampaignAssistant.Channels.Contains(input.Channel) ||
             input.Status is not ("Planeada" or "Activa" or "Finalizada" or "Pausada") ||
             input.Start == default || input.End < input.Start || input.Reached < 0 || input.Leads < 0 ||
             input.AudienceIds is null || input.AudienceIds.Length > 1000)

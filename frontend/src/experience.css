@@ -1,0 +1,92 @@
+@font-face {
+  font-family: Bumi Inter;
+  src: url('/fonts/inter-4.1.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --bumi-navy: #103554;
+  --bumi-ink: #152b3e;
+  --bumi-muted: #4e6475;
+  --bumi-teal: #08788b;
+  --bumi-teal-soft: #e8f5f6;
+  --bumi-gold: #805d20;
+  --bumi-gold-soft: #faf3e4;
+  --bumi-line: #dce5eb;
+  --bumi-surface: #f4f7fc;
+  --bumi-page-background:
+    radial-gradient(ellipse at 8% 10%, #e5eefc 0, transparent 48%),
+    radial-gradient(ellipse at 94% 76%, #e9effb 0, transparent 46%),
+    linear-gradient(145deg, #f7f9fd, #fefeff 60%, #f3f6fc);
+  --bumi-glass: rgba(255, 255, 255, .82);
+  --bumi-hover: #edf4f7;
+}
+
+.shell.portal-shell {
+  --portal-navy: var(--bumi-navy);
+  --portal-blue: var(--bumi-teal);
+  --portal-line: var(--bumi-line);
+  --portal-muted: var(--bumi-muted);
+  --ink: var(--bumi-ink);
+  --muted: var(--bumi-muted);
+  --accent: var(--bumi-navy);
+  --hover: #0a2840;
+  --line: var(--bumi-line);
+  background: var(--bumi-page-background) fixed;
+  font-optical-sizing: auto;
+}
+.portal-shell .portal-header, .portal-shell .portal-nav { background: var(--bumi-glass); }
+.portal-shell .portal-header { backdrop-filter: blur(12px); }
+.portal-shell .portal-nav a { color: var(--bumi-muted); border-radius: 7px; }
+.portal-shell .portal-nav a:hover, .portal-shell .portal-logout:hover { background: var(--bumi-hover); }
+.portal-shell .portal-nav a.selected { color: var(--bumi-navy); background: var(--bumi-hover); }
+.portal-shell .portal-nav a.selected .bumi-icon { color: var(--bumi-teal); }
+.portal-shell .portal-menu-toggle, .portal-shell .portal-header .avatar { background: var(--bumi-hover); color: var(--bumi-navy); }
+.portal-shell .workspace-search input[type=search] { border-color: var(--bumi-line); background: #f8fafb; border-radius: 8px; }
+.portal-shell :is(.panel, .home-card) {
+  background-color: var(--bumi-glass);
+  border-color: var(--bumi-line);
+  border-radius: 11px;
+  box-shadow: 0 2px 6px #102b4010;
+  transition: transform .17s ease, box-shadow .17s ease;
+}
+@media (hover: hover) {
+  .portal-shell :is(.panel, .home-card):hover:not(:has(.panel:hover)) {
+    transform: translateY(-3px);
+    box-shadow: 0 9px 18px #12365219;
+  }
+}
+.portal-shell :is(.panel, .home-card):active { transform: translateY(-1px) scale(.997); }
+.portal-shell :is(button, a, input, select, textarea):focus-visible { outline-color: var(--bumi-teal); }
+.portal-shell .primary { border-radius: 8px; box-shadow: 0 2px 4px #1236521b; }
+.portal-shell .secondary { border-radius: 8px; border-color: var(--bumi-line); }
+.portal-shell :is(table th, .home-operations th) { color: var(--bumi-muted); background: var(--bumi-surface); font-weight: 640; }
+.portal-shell :is(table, .metric strong, .home-metric strong, .marketing-metrics strong) { font-variant-numeric: tabular-nums; }
+.portal-shell .portal-nav a, .portal-shell .portal-logout { font-weight: 590; }
+.portal-shell tbody tr:hover, .portal-shell .tabs .current { background: var(--bumi-hover); }
+.portal-shell .tabs .current { color: var(--bumi-navy); border-color: var(--bumi-line); }
+.portal-shell .home-button.home-primary { background: var(--bumi-navy); border-color: var(--bumi-navy); }
+.portal-shell .home-analyst { background: linear-gradient(140deg,#fff,var(--bumi-teal-soft)); }
+.portal-shell .client-tabs .current, .portal-shell .marketing-profit-heading .tabs .current { color: var(--bumi-navy); background: var(--bumi-hover); border-color: var(--bumi-line); }
+.portal-shell :is(.violet,.blue,.green) { color: var(--bumi-teal); background: var(--bumi-teal-soft); }
+.portal-shell .gold { color: var(--bumi-gold); background: var(--bumi-gold-soft); }
+.portal-shell .badge:is([data-status="Activo"],[data-status="Activa"],[data-status="Aceptada"],[data-status="Completada"],[data-status="Calificado"]) {
+  color: #17636c; background: var(--bumi-teal-soft);
+}
+.portal-shell .badge:is([data-status="Pendiente"],[data-status="En mínimo"],[data-status="En seguimiento"]) {
+  color: var(--bumi-gold); background: var(--bumi-gold-soft);
+}
+.portal-shell .bumi-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: inherit; }
+.portal-shell .bumi-icon svg { display: block; width: 17px; height: 17px; }
+.portal-shell .portal-nav .bumi-icon { width: 1.15rem; color: var(--bumi-muted); }
+.portal-shell .portal-logout .bumi-icon { width: 1.15rem; color: var(--bumi-muted); }
+.portal-shell .notification-link small { background: var(--bumi-teal); }
+@media (prefers-reduced-motion: reduce) {
+  .portal-shell :is(.panel, .home-card), .portal-shell :is(.panel, .home-card):active,
+  .portal-shell :is(.panel, .home-card):hover:not(:has(.panel:hover)) {
+    transform: none; transition: none;
+  }
+}
+

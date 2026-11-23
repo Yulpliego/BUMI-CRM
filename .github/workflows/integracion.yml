@@ -20,19 +20,12 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres_test_only
           DEMO_PASSWORD: VerificaSolo2026!
-        run: docker compose -f docker/compose.yaml up --build --detach
+        run: docker compose -f docker/compose.yaml up --build --wait --wait-timeout 180
       - name: Probar API, PostgreSQL y aplicación web
         env:
           DEMO_PASSWORD: VerificaSolo2026!
-        run: |
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:8080/api/health; then
-              node scripts/verificar.mjs http://127.0.0.1:8080
-              exit $?
-            fi
-            sleep 2
-          done
-          exit 1
+          BUMI_TEST_ENROLL: '1'
+        run: node scripts/verificar.mjs http://127.0.0.1:8080
       - name: Mostrar registros si falla
         if: failure()
         env:

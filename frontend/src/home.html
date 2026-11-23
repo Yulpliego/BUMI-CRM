@@ -1,0 +1,259 @@
+<div class="home-board">
+  <header class="home-heading">
+    <div>
+      <p class="home-date"><span aria-hidden="true"></span>{{ today }}</p>
+      <h1>Dashboard</h1>
+      <p class="home-intro">Ventas, cotizaciones y próximos pendientes en un solo lugar.</p>
+    </div>
+    <div class="home-controls">
+      <label class="home-period"><span class="sr-only">Periodo del panel</span>
+        <select [value]="days()" [disabled]="busy()" (change)="load(+$any($event.target).value)">
+          <option value="30">Últimos 30 días</option>
+          <option value="90">Últimos 90 días</option>
+          <option value="365">Últimos 365 días</option>
+        </select>
+      </label>
+      @if (api.enabled('cotizaciones')) {
+        <a class="home-button home-primary" routerLink="/cotizaciones" [queryParams]="{nueva:1}">+ Crear cotización</a>
+      } @else if (api.enabled('agenda')) {
+        <a class="home-button home-primary" routerLink="/agenda" [queryParams]="{nueva:1}">+ Agendar actividad</a>
+      }
+    </div>
+  </header>
+
+  @if (message()) {
+    <div class="error" role="alert">{{message()}} <button class="text-button" type="button" (click)="load(days())">Reintentar</button></div>
+  }
+  @if (busy()) { <p class="home-loading" role="status">Actualizando el panel…</p> }
+
+  @if (panel(); as state) {
+    <div class="home-metrics" [attr.aria-busy]="busy()">
+      @if (state.salesTotal !== null) {
+        <a class="home-card home-metric" routerLink="/ventas">
+          <span class="home-metric-name">Ventas totales <span class="home-icon"><bumi-icon name="dinero" /></span></span>
+          <strong>{{ money.format(state.salesTotal) }} <small>MXN</small></strong>
+          <span class="home-metric-detail">
+            @if (salesChange() !== null) {
+              <span class="home-change" [class.home-down]="(salesChange() ?? 0) < 0">{{changeLabel()}}</span> vs. periodo anterior
+            } @else { Periodo anterior {{ money.format(state.previousTotal ?? 0) }} }
+          </span>
+        </a>
+      }
+      @if (state.activeQuotes !== null) {
+        <a class="home-card home-metric tone-cyan" routerLink="/cotizaciones">
+          <span class="home-metric-name">Cotizaciones activas <span class="home-icon"><bumi-icon name="cotizaciones" /></span></span>
+          <strong>{{state.activeQuotes}}</strong>
+          <span class="home-metric-detail">Valor de la cartera activa: <b>{{ money.format(state.activeQuoteValue ?? 0) }} MXN</b></span>
+        </a>
+      }
+      @if (state.newClients !== null) {
+        <a class="home-card home-metric tone-gold" routerLink="/clientes">
+          <span class="home-metric-name">Nuevos clientes <span class="home-icon"><bumi-icon name="clientes" /></span></span>
+          <strong>{{state.newClients}}</strong>
+          <span class="home-metric-detail">{{state.previousNewClients}} en el periodo anterior</span>
+          <span class="home-metric-detail">Altas directas y conversiones registradas</span>
+        </a>
+      }
+      @if (state.activeQuotes !== null) {
+        <a class="home-card home-metric tone-cyan" routerLink="/cotizaciones">
+          <span class="home-metric-name">Tasa de conversión <span class="home-icon"><bumi-icon name="conversion" /></span></span>
+          <strong>{{state.conversionRate !== null ? percent(state.conversionRate) : '—'}}</strong>
+          <span class="home-metric-detail">{{state.acceptedQuotes}} aceptadas de {{state.resolvedQuotes}} cotizaciones resueltas</span>
+        </a>
+      }
+      @if (state.analyst; as analyst) {
+        <article class="home-card home-analyst">
+          <span class="home-metric-name">Analista IA <span class="home-icon"><bumi-icon name="asistente" /></span></span>
+          <b>{{analyst.openCount}} {{analyst.openCount === 1 ? 'oportunidad abierta' : 'oportunidades abiertas'}}</b>
+          @if (analyst.dueSoon) {
+            <span class="home-metric-detail">{{analyst.dueSoon}} con cierre vencido o previsto en los próximos 7 días</span>
+          }
+          @if (analyst.suggestions.length) {
+            <button class="home-analyst-button" type="button" (click)="analystOpen.set(!analystOpen())"
+              [attr.aria-expanded]="analystOpen()" aria-controls="dashboard-analyst">
+              {{analystOpen() ? 'Ocultar recomendaciones' : 'Ver recomendaciones'}} <span aria-hidden="true">→</span>
+            </button>
+          } @else {
+            <a class="home-text-link" routerLink="/clientes/oportunidades">Abrir oportunidades <span aria-hidden="true">→</span></a>
+          }
+        </article>
+      }
+    </div>
+
+    @if (state.analyst; as analyst) {
+      <section id="dashboard-analyst" class="home-card home-suggestions" [hidden]="!analystOpen() || !analyst.suggestions.length" aria-labelledby="dashboard-analyst-title">
+        <header class="home-section-head">
+          <div><h2 id="dashboard-analyst-title">Oportunidades de venta</h2>
+            <p>Recomendaciones según la fecha de cierre, la etapa y el importe de tu cartera actual.</p></div>
+          <a class="home-text-link" routerLink="/clientes/oportunidades">Ver cartera <span aria-hidden="true">→</span></a>
+        </header>
+        <ul>
+          @for (item of analyst.suggestions; track item.id) {
+            <li>
+              <a routerLink="/clientes/oportunidades" [queryParams]="{id:item.id}"><strong>{{item.description}}</strong></a>
+              <span class="home-metric-detail">{{item.party}} · {{item.stage}} · {{money.format(item.value)}} MXN</span>
+              @if (item.expectedClose) { <time [attr.datetime]="item.expectedClose">Cierre previsto: {{date(item.expectedClose)}}</time> }
+              <p>{{item.recommendation}}</p>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <div class="home-columns">
+      <div class="home-main">
+        @if (state.salesTotal !== null) {
+          <section class="home-card home-trend" aria-labelledby="sales-trend">
+            <header class="home-section-head">
+              <div><h2 id="sales-trend">Rendimiento de ventas</h2><p>{{date(state.start)}} – {{date(state.end)}}</p></div>
+              <span class="home-legend">Ventas en MXN</span>
+            </header>
+            @if (chart().max > 0) {
+              <div class="home-chart-scroll">
+                <div class="home-chart" [style.min-width.px]="chart().points.length > 8 ? 680 : null">
+                  <div class="home-scale" aria-hidden="true">
+                    @for (tick of chart().ticks; track tick.y) {<span [style.top.%]="tick.y / 2.2">{{tick.label}}</span>}
+                  </div>
+                  <div class="home-plot">
+                    <svg viewBox="0 0 760 220" preserveAspectRatio="none" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="home-sales-fill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="#08788b" stop-opacity=".16"/>
+                          <stop offset="100%" stop-color="#08788b" stop-opacity="0"/>
+                        </linearGradient>
+                      </defs>
+                      @for (tick of chart().ticks; track tick.y) {
+                        <line x1="0" x2="760" [attr.y1]="tick.y" [attr.y2]="tick.y" stroke="#dae7ee" stroke-dasharray="4 5" vector-effect="non-scaling-stroke"/>
+                      }
+                      <path [attr.d]="chart().area" fill="url(#home-sales-fill)" />
+                      @if (selected(); as point) {
+                        <line [attr.x1]="point.x" [attr.x2]="point.x" y1="14" y2="208" stroke="#8298aa"
+                          stroke-dasharray="3 5" vector-effect="non-scaling-stroke" />
+                      }
+                      <path [attr.d]="chart().path" stroke="#103554" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round" fill="none" vector-effect="non-scaling-stroke"/>
+                    </svg>
+                    @if (selected(); as point) {
+                      <div class="home-chart-tooltip" aria-hidden="true" [style.--home-tip-x]="point.x / 7.6 + '%'">
+                        <small>{{short(point.from)}} – {{short(point.through)}}</small><strong>{{money.format(point.total)}}</strong>
+                      </div>
+                    }
+                    @for (point of chart().points; track point.from; let i = $index) {
+                      <button type="button" class="home-point" [class.home-point-current]="point === selected()"
+                        [style.left.%]="point.x / 7.6" [style.top.%]="point.y / 2.2"
+                        [attr.aria-label]="date(point.from) + ' a ' + date(point.through) + ': ' + money.format(point.total) + ' MXN'"
+                        (mouseenter)="highlighted.set(i)" (focus)="highlighted.set(i)" (click)="highlighted.set(i)"></button>
+                    }
+                  </div>
+                  <div class="home-x-axis" aria-hidden="true">
+                    @for (point of chart().points; track point.from) {<span>{{short(point.from)}}</span>}
+                  </div>
+                </div>
+              </div>
+              @if (selected(); as point) {
+                <div class="sr-only" aria-live="polite"><span>{{date(point.from)}} – {{date(point.through)}}</span><strong>{{money.format(point.total)}} MXN</strong></div>
+              }
+            } @else {
+              <p class="home-empty home-empty-chart">Sin ventas registradas en el periodo seleccionado.</p>
+            }
+          </section>
+        }
+
+        @if (state.salesTotal !== null || state.activeQuotes !== null) {
+          <section class="home-card home-operations" aria-labelledby="recent-operations">
+            <header class="home-section-head">
+              <div><h2 id="recent-operations">Últimas operaciones</h2><p>Ventas y cotizaciones del periodo</p></div>
+              <div class="home-table-actions">
+                <label class="home-search"><span class="sr-only">Buscar operaciones</span>
+                  <input #operationSearch type="search" placeholder="Buscar cliente o folio" [value]="query()" (input)="search(operationSearch.value)">
+                </label>
+                <button class="home-button" type="button" (click)="exportOperations()" [disabled]="!filtered().length || busy()">Exportar CSV</button>
+              </div>
+            </header>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Cliente / folio</th><th>Responsable</th><th>Tipo</th><th>Importe MXN</th><th>Fecha</th><th>Estado</th></tr></thead>
+                <tbody>
+                  @for (row of visible(); track row.module + row.id) {
+                    <tr>
+                      <td><a class="home-record" [routerLink]="'/' + row.module" [queryParams]="{id:row.id}">
+                        <span class="home-initials" aria-hidden="true">{{initials(row.party)}}</span>
+                        <span><strong>{{row.party}}</strong><small>{{folio(row)}}</small></span>
+                      </a></td>
+                      <td>{{row.owner}}</td><td>{{kind(row)}}</td><td class="home-amount">{{money.format(row.total)}}</td>
+                      <td class="home-row-date">{{date(row.date)}}</td><td><span class="badge" [attr.data-status]="row.status">{{row.status}}</span></td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="6" class="empty">{{query() ? 'No encontramos operaciones que coincidan.' : 'Aún no hay operaciones en este periodo.'}}</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (filtered().length) {
+              <footer class="home-table-footer">
+                <span>{{filtered().length}} {{filtered().length === 1 ? 'operación' : 'operaciones'}}</span>
+                @if (pageCount() > 1) {
+                  <div>
+                    <button class="home-button" type="button" (click)="page.update(previousPage)" [disabled]="page() === 1" aria-label="Página anterior">‹</button>
+                    <span>Página {{page()}} de {{pageCount()}}</span>
+                    <button class="home-button" type="button" (click)="page.update(nextPage)" [disabled]="page() === pageCount()" aria-label="Página siguiente">›</button>
+                  </div>
+                }
+              </footer>
+            }
+          </section>
+        }
+
+        @if (api.enabled('historial') && workspace(); as work) {
+          <section class="home-card home-activity">
+            <header class="home-section-head">
+              <div><h2>Actividad reciente</h2><p>Últimos movimientos del CRM</p></div>
+              <a class="home-text-link" routerLink="/historial">Historial <span aria-hidden="true">→</span></a>
+            </header>
+            @for (event of work.recent; track event.key) {
+              <div class="home-side-row"><div><strong>{{event.party}} · {{event.type}}</strong><small>{{event.description}}</small></div><time>{{formatTask(event.at)}}</time></div>
+            } @empty { <p class="home-empty">Aún no hay actividad reciente.</p> }
+          </section>
+        }
+      </div>
+
+      @if (api.enabled('agenda') || api.enabled('cotizaciones') || api.enabled('inventario') || api.enabled('clientes') || workspaceError()) {
+        <aside class="home-side" aria-label="Agenda y seguimiento">
+          @if (workspaceError()) {
+            <p class="error" role="alert">{{workspaceError()}} <button class="text-button" type="button" (click)="loadWorkspace()">Reintentar</button></p>
+          }
+          @if (workspace(); as work) {
+            @if (api.enabled('agenda')) {
+              <section class="home-card home-side-card">
+                <header class="home-section-head">
+                  <div><h2>Agenda comercial</h2><p>{{work.pending}} pendientes @if (work.overdue) { · <span class="home-overdue">{{work.overdue}} vencidos</span>}</p></div>
+                  <a class="home-add" routerLink="/agenda" [queryParams]="{nueva:1}" aria-label="Programar actividad">+</a>
+                </header>
+                @for (task of work.tasks; track task.id) {
+                  <a class="home-side-row home-task" routerLink="/agenda" [queryParams]="{id:task.id}">
+                    <span class="home-task-icon"><bumi-icon name="agenda" /></span>
+                    <div><strong>{{task.title}}</strong><small>{{task.party || task.type}}</small><time>{{formatTask(task.due)}}</time></div>
+                  </a>
+                } @empty { <p class="home-empty">Tu agenda está al día.</p> }
+                <a class="home-side-link" routerLink="/agenda">Abrir agenda <span aria-hidden="true">→</span></a>
+              </section>
+            }
+            @if (api.enabled('cotizaciones') || api.enabled('inventario') || api.enabled('clientes')) {
+              <section class="home-card home-side-card">
+                <header class="home-section-head"><div><h2>Requieren atención</h2></div></header>
+                @if (api.enabled('cotizaciones')) {
+                  <a class="home-side-row home-quick" routerLink="/cotizaciones" [queryParams]="{vence:1}"><span>Cotizaciones por vencer</span><b>{{work.expiring}}</b></a>
+                }
+                @if (api.enabled('inventario')) {
+                  <a class="home-side-row home-quick" routerLink="/inventario" [queryParams]="{bajo:1}"><span>Productos en mínimo</span><b>{{work.lowStock}}</b></a>
+                }
+                @if (api.enabled('clientes')) {
+                  <a class="home-side-row home-quick" routerLink="/clientes/oportunidades"><span>Cartera abierta</span><b>{{money.format(work.openValue)}}</b></a>
+                }
+              </section>
+            }
+          }
+        </aside>
+      }
+    </div>
+  }
+</div>

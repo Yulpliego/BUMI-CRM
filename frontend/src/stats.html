@@ -1,0 +1,164 @@
+<div class="insights">
+  <header class="page-head insights-head">
+    <div>
+      @if (analyst()) {
+        <h1>Analista IA</h1>
+        <p>Estima cuánto podrías vender en los próximos meses y prueba cómo cambiaría la cifra en distintos escenarios.</p>
+      } @else {
+        <h1>Estadísticas</h1><p>Compara ventas, productos y oportunidades comerciales de BUMI.</p>
+      }
+    </div>
+    <div class="actions">
+      @if (analyst()) {
+        <a class="secondary button" routerLink="/estadisticas" [queryParams]="periodQuery">Ver estadísticas</a>
+      } @else {
+        <button class="secondary" type="button" (click)="exportCsv()" [disabled]="!stats()">Exportar CSV</button>
+        <a class="primary button" routerLink="/analista" [queryParams]="periodQuery">Ver pronóstico de ventas</a>
+      }
+    </div>
+  </header>
+
+  <form class="filters panel insights-filters" (ngSubmit)="load()">
+    <label>Desde<input type="date" name="start" [(ngModel)]="start"></label>
+    <label>Hasta<input type="date" name="end" [(ngModel)]="end"></label>
+    <label>Estado de venta<select name="status" [(ngModel)]="status"><option value="">Ventas vigentes</option>@for (value of statuses; track value) {<option>{{value}}</option>}</select></label>
+    @if (api.manager) {
+      <label>Responsable<select name="owner" [(ngModel)]="owner"><option value="">Todo el equipo</option>
+        @for (person of stats()?.owners; track person.id) {<option [value]="person.id">{{person.name}}</option>}
+      </select></label>
+    }
+    <button class="primary" [disabled]="busy()">{{busy() ? 'Cargando…' : 'Aplicar filtros'}}</button>
+  </form>
+  @if (message()) {<p class="error" role="alert">{{message()}}</p>}
+  @if (stats(); as s) {
+    @if (analyst()) {
+      <section class="insight-guide" aria-label="Cómo usar el analista">
+        <div><strong>1. Revisa la estimación</strong><span>Compara tus ventas registradas con los importes de los meses proyectados.</span></div>
+        <div><strong>2. Simula un cambio</strong><span>Elige un horizonte y ajusta el escenario para explorar un alza o una caída.</span></div>
+        <div><strong>3. Consulta el respaldo</strong><span>Revisa el rango, los errores históricos y las operaciones detrás de las cifras.</span></div>
+      </section>
+      @if (s.forecast.reason) {
+        <section class="panel padded">
+          <h2>Pronóstico aún no disponible</h2>
+          <p>{{s.forecast.reason}}</p>
+          @if (api.enabled('ventas')) {<a class="secondary button" routerLink="/ventas">Revisar ventas registradas</a>}
+        </section>
+      } @else {
+        <div class="insight-grid forecast-workspace">
+          <section class="panel padded forecast-main">
+            <header class="section-head">
+              <div><h2>Pronóstico de ventas</h2><p>Ventas reales hasta el {{date(s.forecast.through ?? '')}} · MXN</p></div>
+              <div class="insight-reel" aria-label="Horizonte del pronóstico">
+                @for (term of [1,2,3]; track term) {
+                  <button type="button" [attr.aria-pressed]="horizon() === term" (click)="horizon.set(term)">{{term}} {{term === 1 ? 'mes' : 'meses'}}</button>
+                }
+              </div>
+            </header>
+            <div class="insight-legend">
+              <span><i></i>Ventas reales</span><span><i class="legend-projection"></i>Pronóstico</span><span><i class="legend-band"></i>Rango estimado</span>
+            </div>
+            <bumi-analytic-chart [plot]="projection()" caption="Pronóstico de ventas en pesos mexicanos" [line]="true" />
+          </section>
+          <aside class="panel padded forecast-controls">
+            <header class="section-head"><div><h2>Simula un escenario</h2><p>Ajusta la estimación base entre −30 % y +30 %.</p></div></header>
+            <label>Ajuste <strong>{{signed.format(scenario())}} %</strong>
+              <input type="range" min="-30" max="30" step="5" [ngModel]="scenario()" (ngModelChange)="scenario.set(+$event)" [attr.aria-valuetext]="signed.format(scenario()) + ' por ciento'">
+            </label>
+            <div class="scenario-ticks" aria-hidden="true"><span>−30 %</span><span>0 %</span><span>+30 %</span></div>
+            <div class="scenario-total" aria-live="polite">
+              <span>Ventas proyectadas · {{horizon()}} {{horizon() === 1 ? 'mes' : 'meses'}}</span>
+              <strong>{{money.format(scenarioTotals().value)}}</strong>
+              <small>Rango orientativo {{money.format(scenarioTotals().low)}} a {{money.format(scenarioTotals().high)}}</small>
+            </div>
+            @if (s.forecast.meanError !== null) {<p class="scenario-error">El error promedio del modelo en meses de prueba fue de <strong>{{money.format(s.forecast.meanError)}}</strong>.</p>}
+            <button class="secondary" type="button" (click)="scenario.set(0)" [disabled]="!scenario()">Restablecer ajuste</button>
+          </aside>
+        </div>
+        <details class="panel padded forecast-explanation">
+          <summary>Cómo se calcula el pronóstico</summary>
+          <p>BUMI usa {{s.forecast.months}} meses cerrados del periodo y aplica el modelo {{s.forecast.model}}. El rango orientativo se estima a partir de errores observados en meses anteriores. El ajuste del escenario se aplica únicamente a los meses proyectados.</p>
+        </details>
+      }
+      @if (validationChart().length) {
+        <section class="panel padded">
+          <header class="section-head"><div><h2>Pronóstico frente al resultado real</h2><p>Compara las estimaciones históricas con lo que se vendió.</p></div></header>
+          <div class="insight-legend"><span><i class="legend-comparison"></i>Pronóstico</span><span><i class="legend-real"></i>Ventas reales</span></div>
+          <bumi-analytic-chart [plot]="validationChart()" caption="Validación histórica en pesos mexicanos" />
+        </section>
+      }
+    } @else {
+      <section class="insight-metrics" aria-label="Indicadores comerciales">
+        <article class="panel"><span>Ventas del periodo</span><strong>{{money.format(s.revenue)}}</strong><small>{{s.salesCount}} operaciones según el filtro</small></article>
+        <article class="panel"><span>Ticket promedio</span><strong>{{s.salesCount ? money.format(s.revenue / s.salesCount) : '—'}}</strong><small>Importe promedio por venta</small></article>
+        <article class="panel"><span>Aceptación de cotizaciones</span><strong>{{s.quoteCount ? percent(s.accepted, s.quoteCount) : '—'}}</strong><small>{{s.accepted}} de {{s.quoteCount}} cotizaciones del periodo</small></article>
+        <article class="panel"><span>Cartera activa</span><strong>{{number.format(s.clients + s.leads)}}</strong><small>{{s.clients}} clientes · {{s.leads}} prospectos</small></article>
+      </section>
+
+      <section class="panel padded">
+        <header class="section-head">
+          <div><h2>Ventas por mes</h2><p>{{date(s.start)}} al {{date(s.end)}} · {{metric() === 'total' ? 'MXN' : 'Operaciones'}}</p></div>
+          <div class="insight-reel" aria-label="Métrica de ventas">
+            <button type="button" [attr.aria-pressed]="metric() === 'total'" (click)="metric.set('total')">Importe</button>
+            <button type="button" [attr.aria-pressed]="metric() === 'count'" (click)="metric.set('count')">Operaciones</button>
+          </div>
+        </header>
+        @if (s.months.length) {<bumi-analytic-chart [plot]="salesChart()" caption="Ventas mensuales del periodo" [money]="metric() === 'total'" />}
+        @else {<p class="empty">Sin meses en el periodo seleccionado.</p>}
+      </section>
+
+      <div class="insight-grid">
+        <section class="panel padded">
+          <header class="section-head"><div><h2>Ventas por estado</h2><p>Proporción de operaciones en cada estado.</p></div></header>
+          @if (segments().length) {
+            @let selected = activeSegment();
+            <div class="status-chart">
+              <figure>
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                  <circle cx="60" cy="60" r="45" class="status-track" />
+                  @for (item of segments(); track item.label) {
+                    <circle cx="60" cy="60" r="45" pathLength="100" class="status-arc" [attr.stroke]="item.color" [attr.stroke-dasharray]="item.share + ' 100'"
+                      [attr.stroke-dashoffset]="-item.offset" [class.status-selected]="selected?.label === item.label"
+                      (pointerenter)="hoverStatus.set(item.label)" (pointerleave)="hoverStatus.set('')" />
+                  }
+                </svg>
+                <figcaption>
+                  <strong>{{selected ? percent(selected.value, s.salesCount) : number.format(s.salesCount)}}</strong>
+                  <small>{{selected?.label || 'Operaciones'}}</small>
+                </figcaption>
+              </figure>
+              <div class="status-legend" aria-label="Detalle por estado">
+                @for (item of segments(); track item.label) {
+                  <button type="button" [attr.aria-pressed]="pinnedStatus() === item.label" [class.current]="selected?.label === item.label"
+                    (pointerenter)="hoverStatus.set(item.label)" (pointerleave)="hoverStatus.set('')"
+                    (focus)="focusStatus.set(item.label)" (blur)="focusStatus.set('')" (click)="pinStatus(item.label)"
+                    [attr.aria-label]="item.label + ', ' + item.value + ' operaciones, ' + percent(item.value, s.salesCount)">
+                    <i [style.background]="item.color" aria-hidden="true"></i><span>{{item.label}}</span><strong>{{item.value}}</strong>
+                  </button>
+                }
+              </div>
+            </div>
+          } @else {<p class="empty">Sin ventas para el periodo y los filtros seleccionados.</p>}
+        </section>
+        @for (group of rankings(); track group.title) {
+          <section class="panel padded">
+            <header class="section-head"><div><h2>{{group.title}}</h2><p>{{group.subtitle}}</p></div></header>
+            <div class="insight-ranking">
+              @for (item of group.items; track item.label) {
+                <div class="ranking-item">
+                  <button type="button" [attr.aria-label]="item.label + ', ' + item.detail" (click)="pinRank(group.title, item.label)"
+                    [attr.aria-pressed]="rankActive() === group.title + item.label">
+                    <span>{{item.label}}</span><strong>{{item.display}}</strong>
+                    <span class="rank-track" aria-hidden="true"><i [style.width.%]="item.width"></i></span>
+                  </button>
+                  <span class="rank-tooltip" aria-hidden="true">{{item.detail}}</span>
+                </div>
+              } @empty {<p class="empty">{{group.empty}}</p>}
+            </div>
+          </section>
+        }
+      </div>
+    }
+    <bumi-report-tools [filters]="applied" [months]="s.months" [products]="s.products" [sellers]="s.byOwner"
+      [statuses]="s.byStatus" [validation]="s.validation" [variation]="s.variation" [showModel]="analyst()" />
+  } @else if (busy()) {<p class="empty" role="status">Cargando indicadores…</p>}
+</div>

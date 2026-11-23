@@ -1,0 +1,37 @@
+.marketing-forecast { padding: clamp(.95rem, 2vw, 1.3rem); }
+.marketing-forecast .section-head { align-items: flex-start; flex-wrap: wrap; }
+.marketing-range-control { min-height: 33px; padding: .32rem .52rem; font-size: .75rem; }
+.marketing-range-control[aria-pressed="true"] { background: var(--bumi-teal-soft); }
+.marketing-report { --chart-cols: minmax(85px,126px) minmax(0,1fr) 44px; margin-top:.9rem; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+.marketing-report-heading, .marketing-report-row, .marketing-report-axis { display:grid; grid-template-columns:var(--chart-cols); gap:.5rem; align-items:center; padding:.55rem .68rem; }
+.marketing-report-heading { color:var(--muted); background:var(--bumi-surface); font-size:.7rem; font-weight:700; }
+.marketing-report-heading span:last-child { text-align:right; }
+.marketing-report-row { appearance:none; width:100%; margin:0; border:0; border-bottom:1px solid #edf3f6; background:#fff; color:var(--ink); text-align:left; min-height:43px; }
+.marketing-report-row:hover { background:#f5f9fb; }
+.marketing-report-row[aria-pressed="true"] { background:var(--bumi-hover); box-shadow:inset 3px 0 var(--bumi-teal); }
+.marketing-report-row:focus-visible { outline-offset:-2px; }
+.marketing-report-row strong { text-align:right; font-size:.83rem; font-variant-numeric:tabular-nums; }
+.marketing-report-name { font-size:.8rem; overflow-wrap:anywhere; }
+.marketing-report-track { position:relative; display:block; height:27px; background:repeating-linear-gradient(90deg,var(--bumi-line) 0 1px,transparent 1px 25%); border-right:1px solid var(--bumi-line); }
+.marketing-report-bar { position:absolute; display:block; left:0; top:5px; height:17px; border-radius:0 3px 3px 0; background:#57a7b4; }
+.marketing-report-row[aria-pressed="true"] .marketing-report-bar { background:var(--bumi-navy); }
+.marketing-report-range { position:absolute; min-width:1px; top:13px; height:2px; background:var(--bumi-gold); }
+.marketing-report-range::before,.marketing-report-range::after { content:""; position:absolute; display:block; width:2px; height:9px; top:-3px; background:var(--bumi-gold); }
+.marketing-report-range::after { right:0; }
+.marketing-report-axis { color:var(--muted); font-size:.66rem; padding-block:.4rem; }
+.marketing-report-axis > div { display:flex; justify-content:space-between; }
+.marketing-report-legend { display:flex; flex-wrap:wrap; gap:.35rem 1rem; padding:.5rem .68rem; border-top:1px solid var(--line); font-size:.71rem; color:var(--muted); }
+.marketing-report-legend > span { display:flex; align-items:center; gap:.35rem; }
+.marketing-report-legend i { width:10px; height:8px; background:#57a7b4; border-radius:1px; }
+.marketing-report-legend b { width:13px; height:2px; background:var(--bumi-gold); }
+.forecast-channel-detail { display:flex; flex-wrap:wrap; gap:.6rem 1.05rem; margin-top:.75rem; border:1px solid var(--line); border-radius:9px; background:var(--bumi-hover); padding:.62rem .75rem; font-size:.81rem; }
+.forecast-channel-detail > div:first-child { flex: 1 1 155px; }
+.forecast-channel-detail p, .forecast-channel-detail small { display:block; margin:.18rem 0 0; color:var(--muted); font-size:.74rem; }
+.forecast-results > div { border-color:var(--line); background:var(--bumi-surface); }
+.forecast-results strong { color:var(--bumi-navy); }
+@media(max-width:485px) {
+  .marketing-report { --chart-cols: minmax(60px,77px) minmax(0,1fr) 29px; }
+  .marketing-report-heading,.marketing-report-row,.marketing-report-axis { gap:.3rem; padding-inline:.44rem; }
+  .marketing-report-axis span { font-size:.59rem; }
+}
+

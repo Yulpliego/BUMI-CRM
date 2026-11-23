@@ -1,0 +1,262 @@
+<div class="client-workspace">
+  @if (!details) {
+    <header class="client-heading">
+      <div><p class="client-crumb">Clientes <span aria-hidden="true">›</span> Directorio</p>
+        <h1>Gestión de clientes y cuentas</h1><p>Consulta tu cartera, administra contactos y da seguimiento a oportunidades.</p></div>
+      <div class="actions">
+        <a class="secondary button" routerLink="/clientes/oportunidades">Tablero de oportunidades</a>
+        <button class="secondary" type="button" (click)="exportDirectory()" [disabled]="loading || !filtered().length">Exportar CSV</button>
+        <button class="primary" type="button" (click)="newParty()">+ Nuevo registro</button>
+      </div>
+    </header>
+  }
+
+  @if (notice) { <p class="notice" role="status">{{notice}}</p> }
+  @if (message) { <p class="error" role="alert">{{message}}</p> }
+
+  @if (edit; as p) {
+    <section class="panel padded editor client-editor">
+      <header class="section-head"><h2>{{p.id ? 'Editar ficha' : 'Nuevo registro'}}</h2>
+        <button type="button" class="secondary" (click)="edit = null">Cerrar</button></header>
+      <form class="form-grid" (ngSubmit)="saveParty()">
+        <label>Tipo de registro<select name="kind" [(ngModel)]="p.kind" [disabled]="!!p.id"><option>Prospecto</option><option>Cliente</option></select></label>
+        <label>Tipo de persona<select name="personType" [(ngModel)]="p.personType"><option>Empresa</option><option>Persona física</option></select></label>
+        <label>Nombre o razón social<input name="name" [(ngModel)]="p.name" required maxlength="150"></label>
+        <label>Persona de contacto<input name="contact" [(ngModel)]="p.contact" maxlength="120"></label>
+        <label>Correo<input type="email" name="email" [(ngModel)]="p.email" maxlength="160"></label>
+        <label>Teléfono<input type="tel" name="phone" [(ngModel)]="p.phone" maxlength="35"></label>
+        <label>RFC<input name="rfc" [(ngModel)]="p.rfc" maxlength="13"></label>
+        <label>Giro<input name="industry" [(ngModel)]="p.industry" maxlength="100"></label>
+        <label class="wide">Dirección<input name="address" [(ngModel)]="p.address" maxlength="250"></label>
+        @if (p.kind === 'Prospecto') {
+          <label>Origen<input name="source" [(ngModel)]="p.source" placeholder="Ej. Referido" maxlength="80"></label>
+          <label>Seguimiento<select name="stage" [(ngModel)]="p.stage">@for (stage of leadStages; track stage) {<option>{{stage}}</option>}</select></label>
+        }
+        @if (api.manager) {
+          <label>Responsable<select name="ownerId" [(ngModel)]="p.ownerId">
+            <option [ngValue]="undefined">{{p.id ? 'Conservar responsable' : 'Asignarme a mí'}}</option>
+            @for (owner of owners; track owner.id) {<option [ngValue]="owner.id">{{owner.name}}</option>}
+          </select></label>
+        }
+        <label class="check"><input type="checkbox" name="active" [(ngModel)]="p.active"> Registro activo</label>
+        <div class="form-actions wide"><button class="primary" [disabled]="busy">Guardar registro</button></div>
+      </form>
+      <bumi-duplicates [party]="p" (merged)="reloadMerged(p.id)" />
+    </section>
+  }
+
+  @if (details; as d) {
+    <div class="client-crumb client-detail-crumb">
+      <button class="text-button" type="button" (click)="returnToDirectory()">Clientes</button><span aria-hidden="true">›</span>{{d.party.name}}
+    </div>
+    <section class="panel client-profile">
+      <header class="client-profile-title">
+        <span class="client-avatar" aria-hidden="true">{{initials(d.party.name)}}</span>
+        <div class="client-profile-name">
+          <div><h1>{{d.party.name}}</h1><span class="client-kind" [class.client-lead]="d.party.kind === 'Prospecto'">{{d.party.kind}}</span>
+            @if (d.party.rfc) { <span class="client-rfc">{{d.party.rfc}}</span> }
+            @if (!d.party.active) { <span class="badge" data-status="Inactivo">Inactivo</span> }
+          </div>
+          <p>Responsable: {{d.owner}} @if (d.createdAt) { · Creado el {{localDate(d.createdAt)}} }</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" type="button" (click)="beginEdit(d.party)">Editar ficha</button>
+          @if (confirmStatus) {
+            <button class="secondary danger" type="button" (click)="toggleParty(d.party)" [disabled]="busy">Confirmar desactivación</button>
+            <button class="text-button" type="button" (click)="confirmStatus = false">Cancelar</button>
+          } @else {
+            <button class="secondary" type="button" [class.danger]="d.party.active" (click)="d.party.active ? (confirmStatus = true) : toggleParty(d.party)" [disabled]="busy">{{d.party.active ? 'Desactivar' : 'Reactivar'}}</button>
+          }
+          @if (d.party.kind === 'Prospecto' && d.party.active) {
+            <button class="primary" type="button" (click)="convert(d.party.id)" [disabled]="busy">Convertir en cliente</button>
+          }
+        </div>
+      </header>
+      <nav class="client-profile-nav" aria-label="Secciones de la ficha">
+        @for (item of detailSections(); track item.key) {
+          <button type="button" [class.current]="section === item.key" [attr.aria-pressed]="section === item.key"
+            (click)="selectSection(item.key)">{{item.label}}</button>
+        }
+      </nav>
+    </section>
+
+    @if (section === 'summary') {
+      <div class="client-detail-grid">
+        <div class="client-detail-main">
+          <section class="panel client-panel">
+            <header><h2>Datos de contacto</h2></header>
+            <dl class="client-facts">
+              <div><dt>Correo principal</dt><dd>@if (d.party.email) {<a [href]="'mailto:' + d.party.email">{{d.party.email}}</a>} @else {—}</dd></div>
+              <div><dt>Teléfono</dt><dd>@if (d.party.phone) {<a [href]="'tel:' + d.party.phone">{{d.party.phone}}</a>} @else {—}</dd></div>
+              <div><dt>Contacto principal</dt><dd>{{d.party.contact || '—'}}</dd></div>
+              <div><dt>Dirección fiscal</dt><dd>{{d.party.address || '—'}}</dd></div>
+            </dl>
+          </section>
+          <section class="panel client-panel">
+            <header><div><h2>Contactos</h2><p>{{d.contacts.length}} asociados a esta cuenta</p></div>
+              @if (d.party.active && !contactEdit) { <button class="text-button" type="button" (click)="newContact()">+ Agregar contacto</button> }
+            </header>
+            @for (contact of d.contacts; track contact.id) {
+              <div class="client-contact-row">
+                <span class="client-avatar" aria-hidden="true">{{initials(contact.name)}}</span>
+                <div><strong>{{contact.name}}</strong><small>{{contact.position || '—'}}</small></div>
+                <div class="client-contact-links">
+                  @if (contact.email) { <a [href]="'mailto:' + contact.email">{{contact.email}}</a> }
+                  @if (contact.phone) { <a [href]="'tel:' + contact.phone">{{contact.phone}}</a> }
+                </div>
+              </div>
+            } @empty { <p class="empty">Aún no hay contactos adicionales.</p> }
+            @if (contactEdit; as c) {
+              <form class="form-grid client-inline-form" (ngSubmit)="saveContact(d.party.id)">
+                <label>Nombre<input name="contactName" [(ngModel)]="c.name" maxlength="120" required></label>
+                <label>Cargo<input name="position" [(ngModel)]="c.position" maxlength="80"></label>
+                <label>Correo<input type="email" name="contactEmail" [(ngModel)]="c.email" maxlength="160"></label>
+                <label>Teléfono<input type="tel" name="contactPhone" [(ngModel)]="c.phone" maxlength="35"></label>
+                <div class="actions wide"><button class="primary" [disabled]="busy">Guardar contacto</button><button type="button" class="secondary" (click)="contactEdit = null">Cancelar</button></div>
+              </form>
+            }
+          </section>
+          @if (d.party.active && !edit) { <bumi-duplicates [party]="d.party" (merged)="reloadMerged(d.party.id)" /> }
+        </div>
+        <aside class="client-detail-side" aria-label="Información comercial">
+          <section class="panel client-context"><h2>Origen</h2><p>{{d.party.source || 'Sin origen registrado'}}</p></section>
+          <section class="panel client-context"><h2>Industria</h2><p>{{d.party.industry || 'Sin industria registrada'}}</p></section>
+          <section class="panel client-context"><h2>Oportunidades activas</h2>
+            @for (op of openOpportunities(d.opportunities).slice(0, 4); track op.id) {
+              <div class="client-op-preview"><div><strong>{{op.description}}</strong><small>{{op.stage}}</small></div><b>{{money.format(op.value)}}</b></div>
+            } @empty { <p>Sin oportunidades activas.</p> }
+            <button class="text-button" type="button" (click)="selectSection('opportunities')">Ver oportunidades →</button>
+          </section>
+          @if (api.enabled('historial')) {
+            <section class="panel client-context client-notes"><h2>Notas recientes</h2>
+              @for (note of d.notes; track note.id) {
+                <div><p>{{note.description}}</p><small>{{note.actor}} · {{localDate(note.at)}}</small></div>
+              } @empty { <p>Aún no hay notas en esta ficha.</p> }
+              <button class="text-button" type="button" (click)="selectSection('activity')">Ver actividad →</button>
+            </section>
+          }
+        </aside>
+      </div>
+    } @else if (section === 'opportunities') {
+      <section class="panel client-panel">
+        <header><h2>Oportunidades</h2>@if (d.party.active && !opportunityEdit) { <button class="text-button" type="button" (click)="newOpportunity()">+ Agregar oportunidad</button> }</header>
+        @for (o of d.opportunities; track o.id) {
+          <div class="client-list-row"><div><strong>{{o.description}}</strong><small>{{o.stage}} · {{money.format(o.value)}} @if(o.expectedClose) { · {{date(o.expectedClose)}} }</small></div>
+            @if (d.party.active) { <button class="text-button" type="button" (click)="opportunityEdit = {...o}">Editar</button> }</div>
+        } @empty { <p class="empty">Aún no hay oportunidades registradas.</p> }
+        @if (opportunityEdit; as o) {
+          <form class="form-grid client-inline-form" (ngSubmit)="saveOpportunity(d.party.id)">
+            <label>Descripción<input name="description" [(ngModel)]="o.description" required maxlength="250"></label>
+            <label>Producto o servicio de interés<input name="interest" [(ngModel)]="o.interest" maxlength="150"></label>
+            <label>Valor estimado (MXN)<input type="number" name="value" [(ngModel)]="o.value" min="0" step="0.01" required></label>
+            <label>Cierre estimado<input type="date" name="close" [(ngModel)]="o.expectedClose"></label>
+            <label>Etapa<select name="opportunityStage" [(ngModel)]="o.stage">@for (stage of stages; track stage) {<option>{{stage}}</option>}</select></label>
+            <div class="actions wide"><button class="primary" [disabled]="busy">Guardar oportunidad</button><button type="button" class="secondary" (click)="opportunityEdit = null">Cancelar</button></div>
+          </form>
+        }
+      </section>
+    } @else if (section === 'quotes') {
+      <section class="panel client-panel">
+        <header><h2>Cotizaciones de la cuenta</h2></header>
+        @if (sectionBusy) { <p class="empty" role="status">Cargando cotizaciones…</p> }
+        @else {
+          @for (quote of quotes; track quote.id) {
+            <div class="client-list-row">
+              <div><a [routerLink]="['/cotizaciones']" [queryParams]="{id:quote.id}"><strong>{{code('COT', quote.id)}}</strong></a>
+                <small>{{date(quote.date)}} · {{money.format(quote.total)}} MXN</small></div>
+              <span class="badge" [attr.data-status]="quote.status">{{quote.status}}</span>
+            </div>
+          } @empty { <p class="empty">{{sectionError ? 'No se pudieron cargar las cotizaciones.' : 'Esta cuenta aún no tiene cotizaciones.'}}</p> }
+        }
+      </section>
+    } @else {
+      <section class="panel client-panel">
+        <header><h2>Actividad de la cuenta</h2><a class="text-button" routerLink="/historial" [queryParams]="{ficha:d.party.id}">Ver historial completo</a></header>
+        @if (sectionBusy) { <p class="empty" role="status">Cargando actividad…</p> }
+        @else {
+          @for (item of activity; track item.key) {
+            <div class="client-list-row"><div><strong>{{item.type}}</strong><small>{{item.description}}</small></div><small>{{item.actor}} · {{localDate(item.at)}}</small></div>
+          } @empty { <p class="empty">{{sectionError ? 'No se pudo cargar la actividad.' : 'Esta cuenta aún no tiene actividad registrada.'}}</p> }
+        }
+      </section>
+    }
+  } @else {
+    <div class="client-metrics" [attr.aria-busy]="loading">
+      @for (item of types; track item.value) {
+        <button class="panel client-metric" type="button" [attr.data-tone]="item.value" [attr.aria-pressed]="type === item.value"
+          (click)="setType(item.value)">
+          <span>{{item.title}} <i aria-hidden="true">{{item.icon}}</i></span>
+          <strong>{{loading ? '—' : totals[item.value]}}</strong><small>{{item.description}}</small>
+        </button>
+      }
+    </div>
+    @if (duplicates.size) {
+      <aside class="client-duplicate-banner" aria-label="Coincidencias de datos">
+        <span class="client-duplicate-icon" aria-hidden="true">◇</span>
+        <div><strong>Posibles fichas duplicadas</strong><p>{{duplicates.size}} fichas activas comparten correo, teléfono o RFC.</p></div>
+        <button class="secondary" type="button" (click)="toggleDuplicates()">{{duplicatesOnly ? 'Mostrar toda la cartera' : 'Revisar coincidencias'}}</button>
+      </aside>
+    }
+    <section class="panel client-table">
+      <header class="client-filters">
+        <div class="tabs client-tabs" aria-label="Tipos de ficha">
+          @for (item of types; track item.value) {
+            <button type="button" [class.current]="type === item.value" [attr.aria-pressed]="type === item.value" (click)="setType(item.value)">
+              {{item.label}} <small>{{totals[item.value]}}</small>
+            </button>
+          }
+        </div>
+        <div class="client-filter-fields">
+          <label class="client-search"><span class="sr-only">Buscar en clientes</span>
+            <input type="search" [(ngModel)]="search" (ngModelChange)="page = 1" placeholder="Buscar por empresa, correo, RFC o teléfono">
+          </label>
+          <label><span class="sr-only">Industria</span><select [(ngModel)]="industry" (ngModelChange)="page = 1">
+            <option value="">Todas las industrias</option>@for (value of industries; track value) { <option>{{value}}</option> }
+          </select></label>
+          @if (api.manager) {
+            <label><span class="sr-only">Asesor</span><select [(ngModel)]="adviser" (ngModelChange)="page = 1">
+              <option value="">Todos los asesores</option>@for (value of advisers; track value) { <option>{{value}}</option> }
+            </select></label>
+          }
+          <label><span class="sr-only">Estado</span><select [(ngModel)]="status" (ngModelChange)="page = 1">
+            <option value="">Todos los estados</option><option value="active">Activos</option><option value="inactive">Inactivos</option>
+          </select></label>
+        </div>
+      </header>
+      @let results = filtered();
+      @let pages = pageCount(results.length);
+      <div class="table-scroll" tabindex="0" aria-label="Directorio de clientes y prospectos">
+        <table>
+          <thead><tr><th>Empresa / razón social</th><th>Contacto principal</th><th>Industria / origen</th><th>Oportunidades / valor</th><th>Estado / última actividad</th><th>Acción</th></tr></thead>
+          <tbody>
+            @for (item of results.slice((page - 1) * perPage, page * perPage); track item.id) {
+              <tr>
+                <td><div class="client-identity"><span class="client-avatar" aria-hidden="true">{{initials(item.name)}}</span>
+                  <div><strong>{{item.name}}</strong> <span class="client-kind" [class.client-lead]="item.kind === 'Prospecto'">{{item.kind}}</span>
+                    @if (item.rfc) { <small>RFC: {{item.rfc}}</small> }
+                  </div></div></td>
+                <td><strong>{{item.contact || '—'}}</strong>@if (item.email) {<small>{{item.email}}</small>} @if (item.phone) {<small>{{item.phone}}</small>}</td>
+                <td>{{item.industry || '—'}} @if (item.source) { <small>{{item.source}}</small> }<small>{{item.owner}}</small></td>
+                <td><strong>{{money.format(item.opportunityValue)}} MXN</strong><small>{{item.opportunityCount}} abiertas</small></td>
+                <td><span class="badge" [attr.data-status]="partyStatus(item)">{{partyStatus(item)}}</span>
+                  <small>{{item.lastActivity ? localDate(item.lastActivity) : 'Sin actividad registrada'}}</small></td>
+                <td><button class="secondary client-detail-button" type="button" (click)="openDetails(item.id)">Ver ficha</button></td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="empty">{{loading ? 'Cargando registros…' : 'No hay registros para mostrar.'}}</td></tr> }
+          </tbody>
+        </table>
+      </div>
+      <footer class="client-table-footer">
+        <span>@if(results.length) {Mostrando {{(page - 1) * perPage + 1}}–{{endOfPage(results.length)}} de {{results.length}} registros} @else {0 registros}</span>
+        <div class="actions">
+          <label class="inline-label">Filas<select [(ngModel)]="perPage" (ngModelChange)="page = 1">
+            <option [ngValue]="8">8</option><option [ngValue]="16">16</option><option [ngValue]="32">32</option>
+          </select></label>
+          <button type="button" class="secondary" [disabled]="page === 1" (click)="page = page - 1" aria-label="Página anterior">‹</button>
+          <span>{{page}} / {{pages}}</span>
+          <button type="button" class="secondary" [disabled]="page >= pages" (click)="page = page + 1" aria-label="Página siguiente">›</button>
+        </div>
+      </footer>
+    </section>
+  }
+</div>

@@ -1,0 +1,146 @@
+<div class="marketing-page">
+  <header class="marketing-heading">
+    <div><p>Marketing</p><h1>Campañas</h1><p>Mide a cuántas personas llegaste, cuántas mostraron interés y qué ventas se atribuyen a tus campañas.</p></div>
+    <div class="actions">
+      <button class="secondary" type="button" (click)="exportCampaigns()" [disabled]="loading || !filtered().length">Exportar CSV</button>
+      @if (canCreate) { <button class="primary" type="button" (click)="newCampaign()">+ Nueva campaña</button> }
+    </div>
+  </header>
+  @if (notice) {<p class="notice" role="status">{{notice}}</p>}
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+    @if (edit; as c) {
+      <section class="panel padded editor">
+        <header class="section-head"><h2>{{c.id ? 'Editar campaña' : 'Nueva campaña'}}</h2><button class="secondary" (click)="edit = null">Cerrar</button></header>
+        <form class="form-grid" (ngSubmit)="save()">
+          <label>Nombre<input name="name" [(ngModel)]="c.name" maxlength="150" required></label>
+          <label>Objetivo<input name="goal" [(ngModel)]="c.goal" maxlength="200" required></label>
+          <label>Canal<select name="channel" [(ngModel)]="c.channel">@for (value of channels; track value) {<option>{{value}}</option>}</select></label>
+          <label>Público objetivo<input name="segment" [(ngModel)]="c.segment" maxlength="150"></label>
+          <label>Fecha de inicio<input type="date" name="start" [(ngModel)]="c.start" required></label>
+          <label>Fecha de fin<input type="date" name="end" [(ngModel)]="c.end" [min]="c.start" required></label>
+          <label>Estado<select name="status" [(ngModel)]="c.status">@for (value of statuses; track value) {<option>{{value}}</option>}</select></label>
+          <label>Contactos realizados<input type="number" name="reached" [(ngModel)]="c.reached" min="0" step="1" required></label>
+          <label>Prospectos obtenidos (personas interesadas)<input type="number" name="leads" [(ngModel)]="c.leads" min="0" step="1" required></label>
+          <label class="wide">Descripción<textarea name="description" [(ngModel)]="c.description" maxlength="500" rows="3"></textarea></label>
+          <fieldset class="wide audience"><legend>Clientes y prospectos asociados</legend>
+            @for (person of audience; track person.id) {
+              <label class="check"><input type="checkbox" [checked]="c.audienceIds.includes(person.id)" (change)="setAudience(person.id, $event)">{{person.name}} <small>{{person.kind}}</small></label>
+            } @empty {<p class="empty">Aún no hay registros disponibles.</p>}
+          </fieldset>
+          <div class="form-actions wide"><button class="primary" [disabled]="busy">Guardar campaña</button></div>
+        </form>
+      </section>
+    }
+
+  @let stats = totals();
+  <div class="marketing-metrics">
+    <article class="panel"><header><span>Campañas activas</span><bumi-icon name="marketing" /></header><strong>{{loading ? '—' : number.format(stats.active)}} <small>de {{number.format(campaigns.length)}}</small></strong></article>
+    <article class="panel"><header><span>Alcance total</span><bumi-icon name="estadisticas" /></header><strong>{{loading ? '—' : number.format(stats.reach)}}</strong></article>
+    <article class="panel"><header><span>Prospectos obtenidos</span><bumi-icon name="clientes" /></header><strong>{{loading ? '—' : number.format(stats.leads)}}</strong><small>Personas que mostraron interés</small></article>
+    <article class="panel"><header><span>Ingresos atribuidos</span><bumi-icon name="dinero" /></header><strong>{{attribution ? money.format(stats.revenue) : '—'}}</strong><small>Ventas registradas desde la captación</small></article>
+  </div>
+
+  @let rows = filtered();
+  @let current = selectedCampaign(rows);
+  <div class="marketing-campaigns">
+    <section class="panel marketing-table">
+      <header class="marketing-filters">
+        <label><span class="sr-only">Buscar campañas</span><input type="search" [(ngModel)]="search" placeholder="Buscar campaña o segmento"></label>
+        <label><span class="sr-only">Canal</span><select [(ngModel)]="channelFilter">
+          <option value="">Canal: Todos</option>@for (channel of channels; track channel) {<option>{{channel}}</option>}
+        </select></label>
+        <label><span class="sr-only">Estado</span><select [(ngModel)]="statusFilter">
+          <option value="">Estado: Todos</option>@for (status of statuses; track status) {<option>{{status}}</option>}
+        </select></label>
+      </header>
+      <div class="table-scroll" tabindex="0" aria-label="Tabla de campañas">
+        <table>
+          <thead><tr><th>Campaña</th><th>Canal</th><th>Fechas</th><th>Responsable</th><th>Estado</th><th>Alcance</th></tr></thead>
+          <tbody>
+            @for (c of rows; track c.id) {
+              <tr [class.marketing-selected]="current?.id === c.id" (click)="selectedId = c.id">
+                <td><button class="marketing-campaign-link" type="button" [attr.aria-pressed]="current?.id === c.id" (click)="selectedId = c.id">{{c.name}}</button><small>{{c.goal}}</small></td>
+                <td>{{c.channel}}</td><td>{{date(c.start)}} – {{date(c.end)}}</td><td>{{c.owner}}</td>
+                <td><span class="badge" [attr.data-status]="c.status">{{c.status}}</span></td><td>{{number.format(c.reached)}}</td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="empty">{{loading ? 'Cargando campañas…' : 'Sin campañas para esta búsqueda.'}}</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    @if (current) {
+      @let currentStats = campaignStats(current.id);
+      <aside class="panel marketing-detail" aria-label="Detalle de campaña">
+        <p class="marketing-caption">Detalle de campaña</p>
+        <div class="marketing-detail-title"><h2>{{current.name}}</h2><span class="badge" [attr.data-status]="current.status">{{current.status}}</span></div>
+        <dl class="marketing-facts">
+          <div><dt>Objetivo</dt><dd>{{current.goal}}</dd></div><div><dt>Canal</dt><dd>{{current.channel}}</dd></div>
+          <div><dt>Fechas</dt><dd>{{date(current.start)}} – {{date(current.end)}}</dd></div><div><dt>Responsable</dt><dd>{{current.owner}}</dd></div>
+          <div class="wide"><dt>Segmento</dt><dd>{{current.segment || 'Público general'}}</dd></div>
+          <div class="wide"><dt>Audiencia vinculada</dt><dd>{{number.format(current.audienceIds.length)}} fichas</dd></div>
+        </dl>
+        @if (current.description) { <p class="marketing-description">{{current.description}}</p> }
+        @if (current.audience?.length) {
+          <details class="campaign-audience"><summary>Ver fichas vinculadas</summary>
+            @for (person of current.audience; track person.id) { <div class="report-row"><span>{{person.name}}</span><small>{{person.kind}}</small></div> }
+          </details>
+        }
+        <section class="marketing-funnel" aria-label="Resultados de la campaña">
+          <h3>Resultados atribuidos</h3>
+          <dl>
+            <div><dt>Alcance</dt><dd>{{number.format(current.reached)}}</dd></div>
+            <div><dt>Prospectos</dt><dd>{{number.format(current.leads)}}</dd></div>
+            <div><dt>Cotizaciones</dt><dd>{{attribution ? number.format(currentStats.quotes) : '—'}}</dd></div>
+            <div><dt>Ventas</dt><dd>{{attribution ? number.format(currentStats.sales) : '—'}}</dd></div>
+          </dl>
+        </section>
+        @if (canEdit) {<button class="secondary" type="button" (click)="beginEdit(current)">Editar campaña</button>}
+      </aside>
+    }
+  </div>
+
+  <div class="marketing-intelligence">
+    @if (canCreate) { <bumi-campaign-assistant [audience]="audience" (draft)="newCampaign($event)" /> }
+    <bumi-forecast />
+  </div>
+
+  <section class="panel marketing-profit">
+    <header class="marketing-profit-heading">
+      <div><h2>Rentabilidad de campañas</h2><p>Compara cuánto cuesta captar un prospecto y cuántos terminan comprando.</p></div>
+      <div class="tabs" aria-label="Agrupar rentabilidad">
+        <button type="button" [class.current]="groupBy === 'channel'" [attr.aria-pressed]="groupBy === 'channel'" (click)="groupBy = 'channel'">Por canal</button>
+        <button type="button" [class.current]="groupBy === 'segment'" [attr.aria-pressed]="groupBy === 'segment'" (click)="groupBy = 'segment'">Por segmento</button>
+      </div>
+    </header>
+    @if (attributionError) {
+      <p class="error" role="alert">{{attributionError}} <button type="button" class="text-button" (click)="loadAttribution()">Reintentar</button></p>
+    }
+    <div class="marketing-profit-body">
+      <div class="table-scroll marketing-table" tabindex="0" aria-label="Tabla de rentabilidad">
+        <table>
+          <thead><tr><th>{{groupBy === 'channel' ? 'Canal' : 'Segmento'}}</th><th>Costo por prospecto</th><th>Prospectos que compraron</th><th>Ingresos atribuidos</th></tr></thead>
+          <tbody>
+            @for (item of profitRows(); track item.label) {
+              <tr><td>{{item.label}}</td><td>{{item.prospects ? money.format(item.cost / item.prospects) : '—'}}</td>
+                <td>{{item.prospects ? percent.format(item.soldProspects / item.prospects) : '—'}}</td><td>{{money.format(item.revenue)}}</td></tr>
+            } @empty { <tr><td colspan="4" class="empty">{{!attribution && !attributionError ? 'Cargando atribución…' : 'Sin datos para esta agrupación.'}}</td></tr> }
+          </tbody>
+        </table>
+      </div>
+      @if (attribution && current) {
+        @let chain = campaignStats(current.id);
+        <aside class="marketing-chain" aria-label="Cadena de atribución">
+          <h3>Cadena de atribución</h3><p>{{current.name}}</p>
+          <ol>
+            <li><div><strong>{{number.format(chain.prospects)}} prospectos captados</strong><small>{{money.format(chain.cost)}} de costo registrado</small></div></li>
+            <li><div><strong>{{number.format(chain.quotes)}} cotizaciones</strong><small>Desde la fecha de captación</small></div></li>
+            <li><div><strong>{{number.format(chain.sales)}} ventas atribuidas</strong><small>{{money.format(chain.revenue)}} MXN</small></div></li>
+          </ol>
+        </aside>
+      }
+    </div>
+  </section>
+  <bumi-attribution [audiences]="campaigns" (changed)="loadAttribution()" />
+</div>
+

@@ -1,0 +1,33 @@
+.fulfillment-card { padding:.82rem .8rem; min-width:0; }
+.fulfillment-card > header { border-bottom:1px solid var(--line); margin-bottom:.72rem; padding-bottom:.55rem; }
+.fulfillment-card h2 { font-size:.91rem; }
+.fulfillment-card h3 { font-size:.83rem; }
+.fulfillment-card p { font-size:.76rem; }
+.fulfillment-card > header p { color:var(--muted); margin:.28rem 0 0; }
+.fulfillment-summary { display:grid; gap:.35rem; margin-bottom:.65rem; }
+.fulfillment-summary > strong { display:flex; align-items:center; justify-content:space-between; gap:.35rem; font-size:.79rem; }
+.fulfillment-summary b { color:var(--bumi-teal); font-size:1rem; }
+.fulfillment-summary small { color:var(--muted); font-size:.71rem; }
+.fulfillment-card progress { display:block; width:100%; height:6px; border:0; border-radius:8px; appearance:none; background:var(--bumi-hover); accent-color:var(--bumi-teal); overflow:hidden; }
+.fulfillment-card progress::-webkit-progress-bar { background:var(--bumi-hover); }
+.fulfillment-card progress::-webkit-progress-value { background:var(--bumi-teal); border-radius:8px; }
+.fulfillment-card progress::-moz-progress-bar { background:var(--bumi-teal); }
+.fulfillment-lines { display:grid; gap:.48rem; max-height:338px; overflow:auto; padding-bottom:.1rem; }
+.fulfillment-lines article { border:1px solid var(--line); border-radius:8px; padding:.5rem; overflow-wrap:anywhere; }
+.fulfillment-lines strong { font-size:.75rem; }
+.fulfillment-lines dl { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.2rem; margin:.48rem 0; }
+.fulfillment-lines :is(dt,dd) { text-align:center; margin:0; }
+.fulfillment-lines dt { color:var(--muted); font-size:.62rem; }
+.fulfillment-lines dd { margin-top:.16rem; color:var(--bumi-navy); font-size:.77rem; font-weight:680; }
+.fulfillment-form,.fulfillment-history { margin-top:.82rem; padding-top:.67rem; border-top:1px solid var(--line); }
+.fulfillment-form { gap:.55rem; }
+.fulfillment-form label { font-size:.73rem; }
+.fulfillment-form :is(input,select,textarea) { min-height:34px; font-size:.75rem; padding-inline:.43rem; }
+.fulfillment-form select { padding-right:1.65rem; background-position:calc(100% - 14px) 14px, calc(100% - 9px) 14px; }
+.fulfillment-form .primary { font-size:.75rem; padding:.38rem .55rem; min-height:34px; }
+.fulfillment-history p { margin:.45rem 0 0; }
+.fulfillment-history .report-row { align-items:start; }
+.fulfillment-history .report-row strong { font-size:.77rem; }
+.fulfillment-history .report-row small { font-size:.69rem; }
+@media (max-width:480px) { .fulfillment-form { grid-template-columns:minmax(0,1fr); } }
+

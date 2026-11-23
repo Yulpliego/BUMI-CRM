@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nexo CRM</string>
+    <string name="app_name">BUMI</string>
     <string name="server">Servidor</string>
     <string name="server_title">Dirección del CRM</string>
     <string name="server_hint">https://crm.tuempresa.mx</string>

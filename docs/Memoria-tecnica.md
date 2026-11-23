@@ -1,10 +1,10 @@
-# Memoria técnica de Nexo CRM
+# Memoria técnica de BUMI
 
 ## Problema y alcance
 
 Las pequeñas distribuidoras pueden registrar clientes, cotizaciones y ventas en archivos separados. Esto dificulta saber qué prospectos requieren atención, cuáles propuestas ya se aceptaron y cómo se comportan las ventas por periodo.
 
-Nexo CRM centraliza ese flujo para una empresa mexicana de artículos de oficina, cómputo y consumibles. La entrega de presentación contempla autenticación, clientes y prospectos, marketing, cotizaciones, ventas y estadísticas. El Word de definición sirve como antecedente de requisitos y la implementación usa PostgreSQL.
+BUMI centraliza ese flujo para una empresa mexicana de artículos de oficina, cómputo y consumibles. La entrega de presentación contempla autenticación, clientes y prospectos, marketing, cotizaciones, ventas y estadísticas. El Word de definición sirve como antecedente de requisitos y la implementación usa PostgreSQL.
 
 ## Arquitectura
 
@@ -35,7 +35,7 @@ La API realiza los cálculos monetarios con un tipo decimal y redondea a centavo
 
 ## Seguridad
 
-ASP.NET Core protege las rutas de datos mediante cookies HttpOnly, permisos por rol y comprobación del responsable cuando corresponde. El API valida las entradas y transiciones de estado. El inicio de sesión limita los intentos y un cambio de contraseña invalida sesiones existentes. Las solicitudes de escritura requieren un encabezado del mismo origen y la configuración local de Docker usa variables ignoradas por Git. Para un servidor accesible desde un teléfono, utiliza HTTPS y el entorno Production.
+ASP.NET Core protege las rutas de datos mediante cookies HttpOnly, permisos por rol y comprobación del responsable cuando corresponde. El API valida las entradas y transiciones de estado. Todos los perfiles requieren contraseña y un código temporal de seis dígitos o un código de respaldo. El desafío vence en cinco minutos y admite hasta cinco intentos; los códigos aceptados no se reutilizan. La clave del autenticador se protege con ASP.NET Core Data Protection. Los códigos de respaldo se conservan con hash. La recuperación de contraseña requiere el código vigente y un código de respaldo, e invalida las sesiones existentes. Las solicitudes de escritura requieren un encabezado del mismo origen y la configuración local de Docker usa variables ignoradas por Git. Para un servidor accesible desde un teléfono, utiliza HTTPS y el entorno Production.
 
 ## Aplicación móvil e integración
 
@@ -58,7 +58,7 @@ El proyecto `mobile/` agrega una aplicación Android que carga el CRM desde el s
 | Memoria técnica y documentación | Esta memoria y las guías de la raíz y de Android |
 | Demostración y dominio técnico | Guion reproducible en `README.md` y comprobación por HTTP en `scripts/verificar.mjs` |
 
-La recuperación por correo, la administración de cuentas y los módulos fuera del alcance de presentación siguen pendientes.
+La recuperación usa códigos de respaldo. Los módulos fuera del alcance de presentación siguen pendientes.
 
 ## Verificación de la entrega
 

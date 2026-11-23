@@ -9,7 +9,10 @@ RUN dotnet publish backend/NexoCrm.Api.csproj -c Release --no-restore -o /app/ou
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/out/ .
-RUN mkdir /keys && chown app:app /keys
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && install -d -o app -g app /keys
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 USER app

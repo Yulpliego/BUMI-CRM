@@ -1,4 +1,4 @@
-# Nexo CRM para Android
+# BUMI para Android
 
 Abre `mobile` como proyecto en Android Studio y usa JDK 17 o 21 y Android SDK 34. Para generar el APK desde PowerShell en la raíz del proyecto:
 

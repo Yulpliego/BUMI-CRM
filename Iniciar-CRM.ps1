@@ -2,32 +2,116 @@
     [string]$RuntimePath = (Join-Path $PSScriptRoot '../../work'),
     [int]$WebPort = 5088,
     [int]$PostgresPort = 55432,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$CargarDemo,
+    [switch]$BuzonDemo,
+    [switch]$ConfigurarGmail
 )
 
 $ErrorActionPreference = 'Stop'
 $runtime = (New-Item -ItemType Directory -Force $RuntimePath).FullName
-$dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
-$dotnetPath = if ($dotnet) { $dotnet.Source } else { Join-Path $env:ProgramFiles 'dotnet/dotnet.exe' }
-if (-not (Test-Path $dotnetPath)) { throw 'Instala el SDK de .NET 10 para iniciar el CRM.' }
-$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+$url = "http://127.0.0.1:$WebPort"
+$correoGmail = Join-Path $runtime 'gmail-recuperacion.clixml'
 
-function Confirm-Command([string]$Message) {
-    if ($LASTEXITCODE -ne 0) { throw $Message }
+if ($ConfigurarGmail) {
+    $remitente = (Read-Host 'Dirección Gmail que enviará los mensajes').Trim()
+    try { $validado = [Net.Mail.MailAddress]::new($remitente).Address }
+    catch { throw 'Escribe una dirección de correo válida.' }
+    if ($validado -ne $remitente) { throw 'Escribe solo el correo del remitente.' }
+    $clave = Read-Host 'Contraseña de aplicación de Google (entrada oculta)' -AsSecureString
+    if ($clave.Length -lt 16) { throw 'Ingresa la contraseña de aplicación generada por Google.' }
+    [Management.Automation.PSCredential]::new($remitente,$clave) | Export-Clixml -LiteralPath $correoGmail
+    Write-Host 'Configuración de Gmail guardada. Se aplicará en el siguiente inicio normal de BUMI.'
+    return
+}
+
+function Test-CrmReady {
+    try {
+        $health = Invoke-RestMethod "$url/api/health" -TimeoutSec 2
+        if ($health.database -ne 'PostgreSQL') { return $false }
+        $homePage = Invoke-WebRequest "$url/" -UseBasicParsing -TimeoutSec 2
+        return $homePage.Content -match '<title>(BUMI|Nexo CRM)</title>'
+    } catch {
+        return $false
+    }
+}
+
+function Open-RunningCrm {
+    if ($CargarDemo -or $BuzonDemo) { throw 'Detén BUMI en la terminal que lo ejecuta antes de cambiar su configuración de arranque.' }
+    Write-Host "BUMI ya está en ejecución en $url. Puedes usar la sesión que ya está abierta."
+    if (-not $NoBrowser) { Start-Process $url }
+}
+
+if (Test-CrmReady) {
+    Open-RunningCrm
+    return
+}
+
+$launchLock = $null
+try {
+    $launchLock = [IO.File]::Open((Join-Path $runtime 'nexo-crm.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+} catch [IO.IOException] {
+    if (Test-CrmReady) {
+        Open-RunningCrm
+        return
+    }
+    throw "Ya hay un arranque de BUMI en esta carpeta de trabajo. Revisa la terminal que lo inició."
 }
 
 $serverStarted = $false
-$env:DOTNET_CLI_HOME = $runtime
-$env:NUGET_PACKAGES = Join-Path $runtime 'nuget'
-$env:NUGET_HTTP_CACHE_PATH = Join-Path $runtime 'nuget-http'
-$env:NUGET_SCRATCH = Join-Path $runtime 'nuget-scratch'
-$env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
-$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-$env:CrmKeysPath = (New-Item -ItemType Directory -Force (Join-Path $runtime keys)).FullName
-if (-not $env:DemoPassword) { $env:DemoPassword = 'NexoDemo-2026!' }
-
 try {
+    if (Test-CrmReady) {
+        Open-RunningCrm
+        return
+    }
+
+    $probe = [Net.Sockets.TcpClient]::new()
+    try {
+        try { $probe.Connect([Net.IPAddress]::Loopback, $WebPort) }
+        catch [Net.Sockets.SocketException] {
+            if ($_.Exception.SocketErrorCode -ne [Net.Sockets.SocketError]::ConnectionRefused) { throw }
+        }
+        if ($probe.Connected) { throw "El puerto $WebPort está en uso. Revisa la terminal del proceso que lo ocupa." }
+    } finally {
+        $probe.Dispose()
+    }
+
+    $dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue
+    $dotnetPath = if ($dotnet) { $dotnet.Source } else { Join-Path $env:ProgramFiles 'dotnet/dotnet.exe' }
+    if (-not (Test-Path $dotnetPath)) { throw 'Instala el SDK de .NET 10 para iniciar el CRM.' }
+    $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+
+    function Confirm-Command([string]$Message) {
+        if ($LASTEXITCODE -ne 0) { throw $Message }
+    }
+
+    $env:DOTNET_CLI_HOME = $runtime
+    $env:NUGET_PACKAGES = Join-Path $runtime 'nuget'
+    $env:NUGET_HTTP_CACHE_PATH = Join-Path $runtime 'nuget-http'
+    $env:NUGET_SCRATCH = Join-Path $runtime 'nuget-scratch'
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+    $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
+    $env:ASPNETCORE_ENVIRONMENT = 'Development'
+    $env:CrmKeysPath = (New-Item -ItemType Directory -Force (Join-Path $runtime keys)).FullName
+    if ($CargarDemo) { $env:BumiDemo__Enabled = 'true' }
+    if ($BuzonDemo) {
+        if ($env:RecoveryMail__Host) { throw 'Ya hay un servicio SMTP configurado. Inicia sin -BuzonDemo para usarlo.' }
+        $env:RecoveryMail__PublicOrigin = $url
+        $env:RecoveryMail__PickupDirectory = Join-Path $runtime 'correo-recuperacion'
+        Write-Host ("Buzón local de prueba: " + $env:RecoveryMail__PickupDirectory)
+    } elseif (-not $env:RecoveryMail__Host -and (Test-Path -LiteralPath $correoGmail)) {
+        $cred = Import-Clixml -LiteralPath $correoGmail
+        $env:RecoveryMail__Host = 'smtp.gmail.com'
+        $env:RecoveryMail__Port = '587'
+        $env:RecoveryMail__From = $cred.UserName
+        $env:RecoveryMail__Username = $cred.UserName
+        $env:RecoveryMail__Password = $cred.GetNetworkCredential().Password -replace '\s',''
+        if (-not $env:RecoveryMail__PublicOrigin) { $env:RecoveryMail__PublicOrigin = $url }
+        Remove-Item Env:RecoveryMail__PickupDirectory -ErrorAction SilentlyContinue
+        Write-Host 'Envío de recuperación configurado con Gmail.'
+    }
+    if (-not $env:DemoPassword) { $env:DemoPassword = 'NexoDemo-2026!' }
+
     if (-not $env:ConnectionStrings__Crm) {
         $postgres = Join-Path $runtime 'pgsql/bin'
         if (-not (Test-Path (Join-Path $postgres 'postgres.exe'))) {
@@ -95,11 +179,11 @@ try {
 
     & $dotnetPath restore $backend --configfile (Join-Path $PSScriptRoot 'NuGet.Config')
     Confirm-Command 'No se pudieron restaurar las dependencias de .NET.'
-    & $dotnetPath build $backend --no-restore
+    $apiOutput = Join-Path $runtime 'backend-run'
+    & $dotnetPath build $backend --no-restore --output $apiOutput
     Confirm-Command 'Falló la compilación del backend.'
 
-    $url = "http://127.0.0.1:$WebPort"
-    Write-Host "Iniciando Nexo CRM en $url. Usa Ctrl+C para detenerlo."
+    Write-Host "Iniciando BUMI en $url. Usa Ctrl+C para detenerlo."
     $browserJob = $null
     if (-not $NoBrowser) {
         $browserJob = Start-Job -ArgumentList $url -ScriptBlock {
@@ -115,12 +199,13 @@ try {
     }
     Push-Location $backend
     try {
-        & $dotnetPath 'bin/Debug/net10.0/NexoCrm.Api.dll' --urls $url
+        & $dotnetPath (Join-Path $apiOutput 'NexoCrm.Api.dll') --urls $url
         Confirm-Command 'No se pudo iniciar la API.'
     } finally {
         Pop-Location
         if ($browserJob) { Remove-Job -Job $browserJob -Force }
     }
 } finally {
-    if ($serverStarted) { & $ctl -D $data -m fast -w stop }
+    try { if ($serverStarted) { & $ctl -D $data -m fast -w stop } }
+    finally { $launchLock.Dispose() }
 }

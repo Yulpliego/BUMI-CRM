@@ -12,11 +12,17 @@ var connection = builder.Configuration.GetConnectionString("Crm")
 if (builder.Configuration["CrmKeysPath"] is { } keyPath)
     builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath)).SetApplicationName("NexoCrm");
 builder.Services.AddDbContext<CrmDb>(options => options.UseNpgsql(connection));
-builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
+builder.Services.AddIdentityCore<Account>().AddUserStore<PasskeyStore>();
+builder.Services.AddScoped<IPasskeyHandler<Account>, PasskeyHandler<Account>>();
+builder.Services.Configure<IdentityPasskeyOptions>(options => options.UserVerificationRequirement = "required");
+builder.Services.AddScoped<Authenticator>();
+builder.Services.AddSingleton<PasswordMail>();
+builder.Services.AddSingleton<PasswordMailQueue>();
+builder.Services.AddHostedService(services => services.GetRequiredService<PasswordMailQueue>());
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.Cookie.Name = "NexoCrm.Session";
+        options.Cookie.Name = "Bumi.Session";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
@@ -30,7 +36,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             var user = context.Principal!;
             var db = context.HttpContext.RequestServices.GetRequiredService<CrmDb>();
             var account = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == user.UserId());
-            if (account is null || !account.Active || account.SessionVersion.ToString() != user.FindFirstValue("version"))
+            if (account is null || !account.Active || !user.HasClaim("amr", "mfa") ||
+                account.SessionVersion.ToString() != user.FindFirstValue("version") ||
+                SessionAccess.Current(user) is not Guid sessionId ||
+                !await db.AccountSessions.AnyAsync(x => x.Id == sessionId && x.AccountId == account.Id &&
+                    x.Version == account.SessionVersion && !x.Revoked && x.Expires > DateTimeOffset.UtcNow))
                 context.RejectPrincipal();
         };
     });
@@ -38,17 +48,23 @@ builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
-    options.AddPolicy("login", context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "local",
-        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 12, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
-        }));
+    foreach (var (name, limit) in new[] { ("login", 12), ("verify", 30), ("password-mail", 6), ("password-reset", 15), ("password-backup", 15), ("authenticator-management", 8) })
+        options.AddPolicy(name, context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "local",
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+            }));
 });
 
 var app = builder.Build();
 app.Use(async (context, next) =>
 {
+    if (context.Request.Path.StartsWithSegments("/restablecer"))
+    {
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = "no-store";
+    }
     if (context.Request.Path.StartsWithSegments("/api"))
     {
         context.Response.Headers.CacheControl = "no-store";
@@ -84,10 +100,20 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapGet("/api/health", async (CrmDb db) => await db.Database.CanConnectAsync()
     ? Results.Ok(new { database = "PostgreSQL" }) : Results.StatusCode(503));
 AuthEndpoints.Map(app);
+PasswordRecovery.Map(app);
+RecoveryMailbox.Map(app);
+SessionAccess.Map(app);
 RelationshipEndpoints.Map(app);
 MarketingEndpoints.Map(app);
 CommerceEndpoints.Map(app);
 StatisticsEndpoints.Map(app);
+WorkEndpoints.Map(app);
+StockEndpoints.Map(app);
+ForecastEndpoints.Map(app);
+GrowthEndpoints.Map(app);
+CommerceImprovements.Map(app);
+SupplyImprovements.Map(app);
+WorkImprovements.Map(app);
 app.Map("/api/{**rest}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 
@@ -95,6 +121,17 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CrmDb>();
     await db.Database.EnsureCreatedAsync();
-    await Seed.Initialize(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<Account>>(), app.Configuration);
+    await SchemaUpgrade.Apply(db);
+    await ImprovementSchema.Apply(db);
+    await PasswordRecovery.Apply(db);
+    await RecoveryMailbox.Apply(db);
+    var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<Account>>();
+    await Seed.Initialize(db, hasher, app.Configuration);
+    await OperationsSeed.Initialize(db, hasher, app.Configuration);
+    if (app.Configuration.GetValue<bool>("BumiDemo:Enabled"))
+    {
+        await DemoDataset.Load(db, app.Logger);
+        await ImprovementDemo.Load(db);
+    }
 }
 await app.RunAsync();

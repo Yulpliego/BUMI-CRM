@@ -1,0 +1,16 @@
+.replenishment { padding:.8rem .86rem; background:linear-gradient(130deg,var(--bumi-teal-soft),#fff 76%); }
+.replenishment > header { display:flex; justify-content:space-between; align-items:start; gap:.5rem; flex-wrap:wrap; margin-bottom:.62rem; }
+.replenishment h2 { font-size:.94rem; }
+.replenishment p { margin:.25rem 0 0; color:var(--muted); font-size:.74rem; }
+.replenishment > header a { min-height:33px; padding:.3rem .52rem; font-size:.73rem; }
+.replenishment-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); gap:.48rem; }
+.replenishment-cards article { display:grid; align-content:start; gap:.27rem; padding:.54rem .64rem; border:1px solid var(--line); border-radius:8px; background:#fff; min-width:0; overflow-wrap:anywhere; }
+.replenishment-cards article > strong { color:var(--bumi-navy); font-size:.79rem; }
+.replenishment-cards small { color:var(--muted); font-size:.69rem; }
+.replenishment-cards article > strong small { display:block; margin-top:.16rem; font-weight:500; }
+.replenishment-days { justify-self:start; border-radius:5px; background:var(--bumi-gold-soft); color:var(--bumi-gold); padding:.14rem .28rem; font-size:.68rem; font-weight:670; }
+.replenishment-cards a { font-size:.72rem; white-space:normal; }
+.replenishment-details { margin-top:.66rem; padding:.46rem .58rem; border-radius:7px; background:var(--bumi-surface); }
+.replenishment-details summary { cursor:pointer; color:var(--bumi-navy); font-size:.75rem; font-weight:650; }
+.replenishment-details :is(th,td) { font-size:.73rem; padding:.45rem .5rem; }
+

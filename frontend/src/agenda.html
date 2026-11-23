@@ -1,0 +1,116 @@
+<section class="operation-page">
+  <header class="page-head"><div><h1>Agenda</h1><p>{{range()}}</p></div>
+    <div class="actions">
+      <div class="operation-nav">
+        <button class="secondary" aria-label="Semana anterior" (click)="changeWeek(-1)">‹</button>
+        <button class="secondary" (click)="today()">Hoy</button>
+        <button class="secondary" aria-label="Semana siguiente" (click)="changeWeek(1)">›</button>
+      </div>
+      <button class="primary" (click)="create()">+ Nueva actividad</button>
+    </div>
+  </header>
+  @if (message) {<p class="error" role="alert">{{message}}</p>}
+    @if (draft; as task) {
+      <section class="panel padded editor">
+        <header class="section-head"><h2>{{task.id ? 'Editar actividad' : 'Programar actividad'}}</h2><button class="secondary" (click)="draft = null">Cerrar</button></header>
+        <bumi-schedule [owner]="task.ownerId ?? null" [activity]="task.id || null" [interactive]="true" (suggested)="useSlot($event)" />
+        <form class="form-grid" (ngSubmit)="save()">
+          <label class="wide">Título<input name="title" [(ngModel)]="task.title" maxlength="120" required></label>
+          <label>Fecha y hora<input type="datetime-local" name="due" [(ngModel)]="task.due" required></label>
+          @if (rescheduling()) {
+            <label>Motivo de reprogramación<input name="reason" [(ngModel)]="task.rescheduleReason" maxlength="300" required></label>
+          }
+          <label>Tipo<select name="type" [(ngModel)]="task.type">@for (type of types; track type) {<option>{{type}}</option>}</select></label>
+          <label>Responsable<select name="owner" [(ngModel)]="task.ownerId"><option [ngValue]="undefined">Yo</option>
+            @for (person of people; track person.id) {<option [ngValue]="person.id">{{person.name}}</option>}</select></label>
+          @if (api.enabled('clientes')) {
+            <label>Ficha vinculada<select name="party" [ngModel]="task.partyId" (ngModelChange)="chooseParty($event)">
+              <option [ngValue]="null">Actividad interna</option>@for (party of parties; track party.id) {<option [ngValue]="party.id">{{party.name}}</option>}</select></label>
+            @if (task.partyId) {
+              <label>Oportunidad<select name="opportunity" [(ngModel)]="task.opportunityId">
+                <option [ngValue]="null">Sin oportunidad</option>@for (op of options; track op.id) {<option [ngValue]="op.id">{{op.description}}</option>}</select></label>
+              @if (api.enabled('cotizaciones')) {<label>Cotización<select name="quote" [(ngModel)]="task.quoteId">
+                <option [ngValue]="null">Sin cotización</option>@for (q of selectedQuotes(); track q.id) {<option [ngValue]="q.id">{{folioText('COT',q.id)}} · {{q.status}}</option>}
+              </select></label>}
+            }
+          }
+          <label>Estado<select name="status" [(ngModel)]="task.status">@for (value of statuses; track value) {<option>{{value}}</option>}</select></label>
+          <label class="wide">Descripción<textarea name="description" [(ngModel)]="task.description" maxlength="650" rows="3"></textarea></label>
+          <div class="form-actions wide"><button class="primary" [disabled]="busy || !task.title.trim() || !task.due">Guardar actividad</button></div>
+        </form>
+      </section>
+    }
+  <section class="panel operation-table">
+    <header class="section-head"><h2>Actividades</h2>
+      <div class="operation-tabs" aria-label="Filtrar por estado">
+        @for (tab of activityFilters; track tab.value) {
+          <button type="button" [attr.aria-pressed]="filter === tab.value" (click)="filter = tab.value">{{tab.label}}</button>
+        }
+      </div>
+    </header>
+    <div class="table-scroll"><table><thead><tr><th>Actividad</th><th>Vinculado a</th><th>Asignado</th><th>Fecha y hora</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>@for (item of filtered(); track item.id) {
+        <tr [class.focus-card]="item.id === selected"><td><strong>{{item.title}}</strong><small>{{item.type}}</small></td>
+          <td>
+            @if (item.quoteId && api.enabled('cotizaciones')) {<a class="badge" routerLink="/cotizaciones" [queryParams]="{id:item.quoteId}">{{folioText('COT',item.quoteId)}}</a>}
+            @else if (item.opportunityId && api.enabled('clientes')) {<a class="badge" routerLink="/clientes/oportunidades" [queryParams]="{id:item.opportunityId}">Oportunidad #{{item.opportunityId}}</a>}
+            @else if (item.partyId && api.enabled('clientes')) {<a class="badge" routerLink="/clientes" [queryParams]="{ficha:item.partyId}">{{item.party}}</a>}
+            @else { {{item.party || 'Actividad interna'}} }
+          </td><td>{{item.owner}}</td><td>{{format(item.due)}}</td><td><span class="badge" [attr.data-status]="item.status">{{item.status}}</span></td>
+          <td><div class="actions"><button class="text-button" (click)="edit(item)">Editar</button>
+          @if (item.status === 'Pendiente') {<button class="text-button task-done" [disabled]="busy" (click)="complete(item)">Completar</button>}</div></td></tr>
+      } @empty {<tr><td colspan="6" class="empty">Sin actividades para esta semana y este estado.</td></tr>}</tbody>
+    </table></div>
+  </section>
+  <section class="panel padded workload">
+    <h2>Carga de trabajo de la semana</h2>
+    <p class="muted">Proporción de actividades pendientes y completadas por responsable.</p>
+    @for (person of workload(); track person.owner) {
+      <div class="workload-row"><span>{{person.owner}}</span><span>{{person.count}} {{person.count === 1 ? 'actividad' : 'actividades'}} · {{person.share}} %</span>
+        <div class="operation-meter" aria-hidden="true"><span [style.width.%]="person.share"></span></div>
+      </div>
+    } @empty {<p class="muted">Aún no hay carga registrada para esta semana.</p>}
+  </section>
+  <section class="panel planning">
+    <header class="section-head operation-accent">
+      <div><h2>Calendario de actividades</h2><p>Consulta tu agenda por semana o por día y abre una actividad para reprogramarla.</p></div>
+      <div class="operation-tabs" aria-label="Vista del calendario">
+        <button type="button" [attr.aria-pressed]="!calendarDay" (click)="calendarDay = false">Semana</button>
+        <button type="button" [attr.aria-pressed]="calendarDay" (click)="calendarDay = true">Día</button>
+      </div>
+    </header>
+    <div class="operation-split planning-body">
+      <div class="operation-calendar">
+        @if (calendarDay) {
+          <label>Día de la semana<select [(ngModel)]="dayIndex">@for (day of week(); track day.key; let index = $index) {<option [ngValue]="index">{{day.label}}</option>}</select></label>
+        }
+        @let days = visibleDays();
+        @let hours = calendarHours(days);
+        <div class="calendar-scroll" tabindex="0" aria-label="Calendario por hora">
+          <div class="calendar-days" [class.single-day]="calendarDay">
+            <div class="calendar-hour">Hora</div>
+            @for (day of days; track day.key) {
+              <div class="calendar-day" [class.calendar-today]="day.key === todayKey()"><strong>{{day.label}}</strong></div>
+            }
+            @for (hour of hours; track hour) {
+              <div class="calendar-hour">{{hour}}:00</div>
+              @for (day of days; track day.key) {
+                <div class="calendar-cell">
+                  @for (item of day.slots.get(hour) ?? []; track item.id) {
+                    <button type="button" class="calendar-event" [attr.data-status]="item.status" (click)="edit(item)">
+                      <small>{{time(item.due)}} · {{item.status}}</small><b>{{item.title}}</b><small>{{item.owner}}</small>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+      <aside class="planning-suggestions">
+        <h3>Horarios sugeridos</h3>
+        <bumi-schedule [interactive]="true" [expanded]="true" (suggested)="newAt($event)" />
+      </aside>
+    </div>
+  </section>
+</section>
